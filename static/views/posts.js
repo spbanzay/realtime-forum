@@ -4,13 +4,13 @@ async function renderPostsPage({ title, filter }) {
   const app = document.getElementById("app")
 
   app.innerHTML = `
-    <div class="page">
+    <div class="page posts-page">
       <aside class="sidebar">
         <h3>Categories</h3>
         <div id="categories">Loading...</div>
       </aside>
 
-      <section class="content">
+      <section class="content posts-content">
         <h1>${escapeHtml(title)}</h1>
         <div id="posts">Loading...</div>
       </section>
