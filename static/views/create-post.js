@@ -4,31 +4,40 @@ window.renderCreatePost = async function () {
   app.innerHTML = `
     <div class="page">
       <section class="content narrow">
-        <h1>Create post</h1>
+        <div class="form-container form-container-wide">
+          <h1>Create post</h1>
+          <p class="form-helper">Share an update with the community.</p>
 
-        <form id="createPostForm" class="post-form">
-          <input
-            type="text"
-            id="title"
-            placeholder="Post title"
-            required
-          />
+          <form id="createPostForm" class="post-form">
+            <div class="form-group">
+              <label for="title">Title</label>
+              <input
+                type="text"
+                id="title"
+                placeholder="Post title"
+                required
+              />
+            </div>
 
-          <textarea
-            id="content"
-            placeholder="Post content"
-            required
-          ></textarea>
+            <div class="form-group">
+              <label for="content">Description</label>
+              <textarea
+                id="content"
+                placeholder="Post content"
+                required
+              ></textarea>
+            </div>
 
-          <div class="categories">
-            <h4>Categories</h4>
-            <div id="categories">Loading...</div>
-          </div>
+            <div class="categories">
+              <h4>Categories</h4>
+              <div id="categories">Loading...</div>
+            </div>
 
-          <button type="submit" class="btn btn-primary">
-            Publish
-          </button>
-        </form>
+            <button type="submit" class="btn btn-primary">
+              Publish
+            </button>
+          </form>
+        </div>
       </section>
     </div>
   `
