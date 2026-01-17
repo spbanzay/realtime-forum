@@ -2,8 +2,8 @@ window.renderCreatePost = async function () {
   const app = document.getElementById("app")
 
   app.innerHTML = `
-    <div class="page create-post">
-      <section class="content">
+    <div class="page">
+      <section class="content narrow">
         <div class="form-container form-container-wide">
           <h1>Create post</h1>
           <p class="form-helper">Share an update with the community.</p>
