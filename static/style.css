@@ -97,6 +97,13 @@ a {
   gap: 32px;
 }
 
+.page.single-post {
+  max-width: 100%;
+  grid-template-columns: 1fr;
+  margin: 32px 0;
+  padding: 0 32px;
+}
+
 .sidebar {
   background: var(--surface);
   padding: 20px;
@@ -149,6 +156,11 @@ a {
   margin: 0 0 6px;
 }
 
+.post-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+}
+
 .post-info {
   font-size: 0.85em;
   color: var(--muted);
@@ -164,6 +176,10 @@ a {
 
 .post-tags {
   margin-bottom: 10px;
+}
+
+.post-detail .post-tags {
+  margin-bottom: 16px;
 }
 
 .tag {

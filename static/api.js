@@ -73,7 +73,7 @@ window.api = {
 
   // GET /api/posts?id=ID
   async getPost(id) {
-    const res = await fetch(`/api/posts?id=${id}`, {
+    const res = await fetch(`/api/posts/${id}`, {
       credentials: "include",
     })
     return handleJSON(res)
