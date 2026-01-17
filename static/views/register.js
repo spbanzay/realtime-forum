@@ -98,7 +98,11 @@ window.renderRegister = function () {
               : err?.message === "invalid data"
                 ? "Check email, username (3-20 chars), and age (16+)"
                 : "Registration failed"
-        showRegisterError(err?.message, message)
+        setState({
+          ui: {
+            viewHtml: `<p class="error">${message}</p>`
+          }
+        })
       }
     })
 }
