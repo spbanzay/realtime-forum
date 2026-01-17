@@ -63,7 +63,7 @@ window.renderRegister = function () {
 
           <p class="auth-link">
             Already have an account?
-            <a href="/login" data-link>Login</a>
+            <a href="/login" data-link><b><span style="color: blue;">Login</span></b></a>
           </p>
         </div>
       `
