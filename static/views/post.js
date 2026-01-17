@@ -3,6 +3,7 @@
 window.renderPost = async function ({ id }) {
   id = Number(id)
   const app = document.getElementById("app")
+  const { user } = window.state || {}
 
   if (!id) {
     app.innerHTML = "<p>Invalid post</p>"
@@ -38,8 +39,17 @@ window.renderPost = async function ({ id }) {
             </div>
 
             <div class="post-footer post-actions">
-              <button id="postLikeBtn" class="btn btn-secondary">👍 ${post.likes}</button>
-              <button id="postDislikeBtn" class="btn btn-secondary">👎 ${post.dislikes}</button>
+              ${
+                user
+                  ? `
+                    <button id="postLikeBtn" class="btn btn-secondary">👍 ${post.likes}</button>
+                    <button id="postDislikeBtn" class="btn btn-secondary">👎 ${post.dislikes}</button>
+                  `
+                  : `
+                    <span>👍 ${post.likes}</span>
+                    <span>👎 ${post.dislikes}</span>
+                  `
+              }
               <span class="comment-count">💬 ${comments.length}</span>
             </div>
           </article>
@@ -54,35 +64,40 @@ window.renderPost = async function ({ id }) {
             ${
               comments.length === 0
                 ? `<p class="no-posts">No comments yet</p>`
-                : comments.map(renderComment).join("")
+                : comments.map(comment => renderComment(comment, user)).join("")
             }
           </section>
 
-          <!-- ADD COMMENT -->
-          <section class="add-comment">
-            <h4>Add a comment</h4>
+          ${
+            user
+              ? `
+                <!-- ADD COMMENT -->
+                <section class="add-comment">
+                  <h4>Add a comment</h4>
 
-            <form id="commentForm">
-              <textarea
-                id="commentInput"
-                placeholder="Share your thoughts..."
-                required
-              ></textarea>
-              <button type="submit" class="btn btn-primary">Post comment</button>
-            </form>
-          </section>
+                  <form id="commentForm">
+                    <textarea
+                      id="commentInput"
+                      placeholder="Share your thoughts..."
+                      required
+                    ></textarea>
+                    <button type="submit" class="btn btn-primary">Post comment</button>
+                  </form>
+                </section>
+              `
+              : ""
+          }
 
         </section>
       </div>
     `
 
-    // ✅ единая функция перерендеринга этого же поста
-    const rerender = () => window.renderPost({ id })
-
-    // биндинги
-    bindPostLikes(post.id, rerender)
-    bindCommentLikes(rerender)
-    bindCommentForm(post.id, rerender)
+    if (user) {
+      const rerender = () => window.renderPost({ id })
+      bindPostLikes(post.id, rerender)
+      bindCommentLikes(rerender)
+      bindCommentForm(post.id, rerender)
+    }
 
   } catch (err) {
     console.error(err)
@@ -92,7 +107,7 @@ window.renderPost = async function ({ id }) {
 
 // ================= COMMENTS =================
 
-function renderComment(comment) {
+function renderComment(comment, user) {
   return `
     <div class="comment" data-id="${comment.id}">
       <div class="comment-header">
@@ -103,8 +118,17 @@ function renderComment(comment) {
       <p>${escapeHtml(comment.content)}</p>
 
       <div class="comment-footer">
-        <button class="comment-like btn btn-secondary">👍 ${comment.likes || 0}</button>
-        <button class="comment-dislike btn btn-secondary">👎 ${comment.dislikes || 0}</button>
+        ${
+          user
+            ? `
+              <button class="comment-like btn btn-secondary">👍 ${comment.likes || 0}</button>
+              <button class="comment-dislike btn btn-secondary">👎 ${comment.dislikes || 0}</button>
+            `
+            : `
+              <span>👍 ${comment.likes || 0}</span>
+              <span>👎 ${comment.dislikes || 0}</span>
+            `
+        }
       </div>
     </div>
   `
