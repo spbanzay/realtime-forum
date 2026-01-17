@@ -80,9 +80,17 @@ window.renderRegister = function () {
         router.navigate("/login")
       } catch (err) {
         console.error("Registration failed", err)
+        const message =
+          err?.message === "email exists"
+            ? "Email already registered"
+            : err?.message === "username exists"
+              ? "Username already taken"
+              : err?.message === "invalid data"
+                ? "Check email, username (3-20 chars), and age (16+)"
+                : "Registration failed"
         setState({
           ui: {
-            viewHtml: `<p class="error">Registration failed</p>`
+            viewHtml: `<p class="error">${message}</p>`
           }
         })
       }
