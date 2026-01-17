@@ -218,7 +218,7 @@ func IsValidEmail(email string) bool {
 }
 
 func IsValidUsername(username string) bool {
-	re := regexp.MustCompile(`^[a-zA-Z0-9 _-]{3,20}$`)
+	re := regexp.MustCompile(`^[\p{L}0-9 _-]{3,20}$`)
 	return re.MatchString(username)
 }
 
