@@ -2,6 +2,7 @@
 
 async function renderPostsPage({ title, filter }) {
   const app = document.getElementById("app")
+  const { user } = window.state || {}
 
   app.innerHTML = `
     <div class="page posts-page">
@@ -72,8 +73,8 @@ async function renderPostsPage({ title, filter }) {
       return
     }
 
-    list.innerHTML = posts.map(renderPostCard).join("")
-    bindPostEvents()
+    list.innerHTML = posts.map(post => renderPostCard(post, user)).join("")
+    bindPostEvents(user)
   }
 
   loadPosts()
@@ -81,7 +82,7 @@ async function renderPostsPage({ title, filter }) {
 
 // ================= POST CARD =================
 
-function renderPostCard(post) {
+function renderPostCard(post, user) {
   return `
     <article class="post-card" data-id="${post.id}">
       <h3>${escapeHtml(post.title)}</h3>
@@ -100,8 +101,17 @@ function renderPostCard(post) {
       </div>
 
       <div class="post-footer">
-        <button class="like-btn">👍 ${post.likes}</button>
-        <button class="dislike-btn">👎 ${post.dislikes}</button>
+        ${
+          user
+            ? `
+              <button class="like-btn">👍 ${post.likes}</button>
+              <button class="dislike-btn">👎 ${post.dislikes}</button>
+            `
+            : `
+              <span>👍 ${post.likes}</span>
+              <span>👎 ${post.dislikes}</span>
+            `
+        }
         <span>💬 ${post.comment_count}</span>
       </div>
     </article>
@@ -110,7 +120,7 @@ function renderPostCard(post) {
 
 // ================= EVENTS =================
 
-function bindPostEvents() {
+function bindPostEvents(user) {
   document.querySelectorAll(".post-card").forEach(card => {
     const postId = Number(card.dataset.id)
 
@@ -119,20 +129,26 @@ function bindPostEvents() {
       router.navigate(`/post/${postId}`)
     })
 
+    if (!user) return
+
     const likeBtn = card.querySelector(".like-btn")
     const dislikeBtn = card.querySelector(".dislike-btn")
 
-    likeBtn.addEventListener("click", async e => {
-      e.stopPropagation()
-      await api.likePost(postId)
-      router.resolve()
-    })
+    if (likeBtn) {
+      likeBtn.addEventListener("click", async e => {
+        e.stopPropagation()
+        await api.likePost(postId)
+        router.resolve()
+      })
+    }
 
-    dislikeBtn.addEventListener("click", async e => {
-      e.stopPropagation()
-      await api.dislikePost(postId)
-      router.resolve()
-    })
+    if (dislikeBtn) {
+      dislikeBtn.addEventListener("click", async e => {
+        e.stopPropagation()
+        await api.dislikePost(postId)
+        router.resolve()
+      })
+    }
   })
 }
 
