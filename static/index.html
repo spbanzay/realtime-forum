@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Real-Time Forum</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- HEADER (SPA) -->
+  <div id="header"></div>
+
+  <!-- MAIN SPA ROOT -->
+  <main id="app" class="spa-root"></main>
+
+  <!-- ========================= -->
+  <!-- GLOBAL STATE & UTILS -->
+  <!-- ========================= -->
+  <script defer src="/static/state.js"></script>
+  <script defer src="/static/utils.js"></script>
+
+  <!-- ========================= -->
+  <!-- API & ROUTER -->
+  <!-- ========================= -->
+  <script defer src="/static/api.js"></script>
+  <script defer src="/static/router.js"></script>
+
+  <!-- ========================= -->
+  <!-- VIEWS -->
+  <!-- ========================= -->
+  <script defer src="/static/views/create-post.js"></script>
+  <script defer src="/static/views/login.js"></script>
+  <script defer src="/static/views/register.js"></script>
+
+  <!-- POSTS / POST PAGE -->
+  <script defer src="/static/views/posts.js"></script>
+  <script defer src="/static/views/post.js"></script>
+
+  <!-- ========================= -->
+  <!-- HEADER & NOTIFICATIONS -->
+  <!-- ========================= -->
+  <script defer src="/static/header.js"></script>
+  <script defer src="/static/notifications.js"></script>
+
+  <!-- ========================= -->
+  <!-- SPA ENTRYPOINT -->
+  <!-- ========================= -->
+  <script defer src="/static/spa.js"></script>
+
+</body>
+</html>

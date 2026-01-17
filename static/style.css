@@ -1,0 +1,137 @@
+/* ===== RESET ===== */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f2f4f7;
+  color: #222;
+}
+
+/* ===== HEADER ===== */
+.header {
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.header-inner {
+  max-width: 1200px;
+  margin: auto;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ===== LAYOUT ===== */
+.page {
+  max-width: 1200px;
+  margin: 40px auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 32px;
+}
+
+.sidebar {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.content h1 {
+  margin-top: 0;
+}
+
+/* ===== CATEGORIES ===== */
+.category-item {
+  display: block;
+  margin-bottom: 10px;
+  cursor: pointer;
+  font-size: 0.95em;
+}
+
+.category-item input {
+  margin-right: 8px;
+}
+
+/* ===== POSTS ===== */
+.post-card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  cursor: pointer;
+}
+
+.post-card h3 {
+  margin: 0 0 6px;
+}
+
+.post-info {
+  font-size: 0.85em;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.post-card p {
+  margin: 12px 0;
+}
+
+.post-tags {
+  margin-bottom: 10px;
+}
+
+.tag {
+  background: #eef1f4;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.8em;
+  margin-right: 6px;
+}
+
+/* ===== FOOTER ===== */
+.post-footer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+.post-footer button {
+  background: #f3f4f6;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.post-footer button:hover {
+  background: #e6e8eb;
+}
+
+.comment {
+  background: white;
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.comment-header {
+  font-size: 0.85em;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.add-comment textarea {
+  width: 100%;
+  min-height: 80px;
+  margin-bottom: 10px;
+}
+
+.content.narrow {
+  max-width: 700px;
+  margin: 0 auto;
+}

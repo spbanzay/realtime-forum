@@ -1,0 +1,458 @@
+package handlers
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"real-time-forum/internal/database"
+	"real-time-forum/internal/middleware"
+	"real-time-forum/internal/models"
+	"real-time-forum/internal/utils"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+type Handler struct {
+	db *sql.DB
+}
+
+func NewHandler(db *sql.DB) *Handler {
+	return &Handler{db: db}
+}
+
+//
+// ===================== AUTH =====================
+//
+
+// POST /api/register
+func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Email     string `json:"email"`
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		Age       int    `json:"age"`
+		Gender    string `json:"gender"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	if !utils.IsValidEmail(req.Email) ||
+		!utils.IsValidUsername(req.Username) ||
+		req.Age < 16 {
+		http.Error(w, "invalid data", http.StatusBadRequest)
+		return
+	}
+
+	if ok, _ := database.EmailExists(h.db, req.Email); ok {
+		http.Error(w, "email exists", http.StatusConflict)
+		return
+	}
+	if ok, _ := database.UsernameExists(h.db, req.Username); ok {
+		http.Error(w, "username exists", http.StatusConflict)
+		return
+	}
+
+	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+
+	_, err := h.db.Exec(`
+		INSERT INTO users (email, username, password_hash, age, gender, first_name, last_name)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		req.Email, req.Username, string(hash),
+		req.Age, req.Gender, req.FirstName, req.LastName,
+	)
+
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+// POST /api/login
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Identifier string `json:"identifier"`
+		Password   string `json:"password"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	var user models.User
+	err := h.db.QueryRow(`
+		SELECT id, username, password_hash
+		FROM users
+		WHERE email = ? OR username = ?`,
+		req.Identifier, req.Identifier,
+	).Scan(&user.ID, &user.Username, &user.PasswordHash)
+
+	if err != nil ||
+		bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
+		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	if err := middleware.CreateSession(w, h.db, user.ID); err != nil {
+		http.Error(w, "session error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// POST /api/logout
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	middleware.LogoutUser(w, r, h.db)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/me
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.GetUserIDFromSession(r, h.db)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	user, _ := database.GetUserByID(h.db, userID)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":       user.ID,
+		"username": user.Username,
+	})
+}
+
+//
+// ===================== POSTS =====================
+//
+
+// GET /api/posts
+func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserIDFromSession(r, h.db)
+	query := r.URL.Query()
+
+	// filters
+	mine := query.Get("mine") == "1"
+	liked := query.Get("liked") == "1"
+
+	var categoryIDs []int
+	if raw := query.Get("categories"); raw != "" {
+		for _, s := range strings.Split(raw, ",") {
+			if id, err := strconv.Atoi(s); err == nil {
+				categoryIDs = append(categoryIDs, id)
+			}
+		}
+	}
+
+	var (
+		posts []models.Post
+		err   error
+	)
+
+	switch {
+	case mine && len(categoryIDs) > 0:
+		posts, err = database.GetPostsByUserIDAndCategories(h.db, userID, categoryIDs)
+	case mine:
+		posts, err = database.GetPostsByUserID(h.db, userID)
+	case liked && len(categoryIDs) > 0:
+		posts, err = database.GetLikedPostsByCategories(h.db, userID, categoryIDs)
+	case liked:
+		posts, err = database.GetLikedPosts(h.db, userID)
+	case len(categoryIDs) > 0:
+		posts, err = database.GetPostsByCategories(h.db, categoryIDs)
+	default:
+		posts, err = database.GetAllPosts(h.db)
+	}
+
+	if err != nil {
+		http.Error(w, "failed to load posts", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(posts)
+}
+
+// GET /api/posts/{id}
+func (h *Handler) GetPost(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.Atoi(parts[3])
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	post, err := database.GetPostByID(h.db, id)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(post)
+}
+
+// POST /api/posts/create
+// POST /api/posts/create
+func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.GetUserIDFromSession(r, h.db)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Title      string   `json:"title"`
+		Content    string   `json:"content"`
+		Categories []string `json:"categories"` // IDs категорий строками
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	if ok, msg := utils.ValidateCompletePostData(
+		req.Title,
+		req.Content,
+		req.Categories,
+	); !ok {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	// 1️⃣ создаём пост
+	postID, err := database.CreatePost(h.db, userID, req.Title, req.Content)
+	if err != nil {
+		http.Error(w, "failed to create post", http.StatusInternalServerError)
+		return
+	}
+
+	// 2️⃣ сохраняем категории
+	for _, catIDStr := range req.Categories {
+		catID, err := strconv.Atoi(catIDStr)
+		if err != nil {
+			continue
+		}
+
+		if err := database.AddCategoryToPost(h.db, postID, catID); err != nil {
+			http.Error(w, "failed to save categories", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{"id": postID})
+}
+
+//
+// ===================== COMMENTS =====================
+//
+
+// /api/comments  (GET, POST)
+func (h *Handler) Comments(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+
+	case http.MethodGet:
+		postID, err := strconv.Atoi(r.URL.Query().Get("post_id"))
+		if err != nil || postID == 0 {
+			http.Error(w, "invalid post id", http.StatusBadRequest)
+			return
+		}
+
+		comments, err := database.GetCommentsByPostID(h.db, postID)
+		if err != nil {
+			http.Error(w, "failed to load comments", http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(comments)
+
+	case http.MethodPost:
+		userID, err := middleware.GetUserIDFromSession(r, h.db)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		var req struct {
+			PostID  int    `json:"post_id"`
+			Content string `json:"content"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+
+		if ok, msg := utils.ValidateCommentData(req.Content); !ok {
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		_, err = h.db.Exec(`
+			INSERT INTO comments (post_id, user_id, content, created_at)
+			VALUES (?, ?, ?, datetime('now'))`,
+			req.PostID, userID, req.Content,
+		)
+
+		if err != nil {
+			http.Error(w, "failed to create comment", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+//
+// ===================== REACTIONS =====================
+//
+
+// POST /api/posts/like
+func (h *Handler) LikePost(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.GetUserIDFromSession(r, h.db)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		PostID int `json:"post_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// ✅ LIKE = true
+	likes, dislikes, err := utils.TogglePostReaction(h.db, userID, req.PostID, true)
+	if err != nil {
+		http.Error(w, "failed to like post", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]int{
+		"likes":    likes,
+		"dislikes": dislikes,
+	})
+}
+
+// POST /api/posts/dislike
+func (h *Handler) DislikePost(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.GetUserIDFromSession(r, h.db)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		PostID int `json:"post_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// ✅ DISLIKE = false
+	likes, dislikes, err := utils.TogglePostReaction(h.db, userID, req.PostID, false)
+	if err != nil {
+		http.Error(w, "failed to dislike post", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]int{
+		"likes":    likes,
+		"dislikes": dislikes,
+	})
+}
+
+// POST /api/comments/like
+func (h *Handler) LikeComment(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.GetUserIDFromSession(r, h.db)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		CommentID int `json:"comment_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// ✅ LIKE = true
+	likes, dislikes, err := utils.ToggleCommentReaction(h.db, userID, req.CommentID, true)
+	if err != nil {
+		http.Error(w, "failed to like comment", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]int{
+		"likes":    likes,
+		"dislikes": dislikes,
+	})
+}
+
+// POST /api/comments/dislike
+func (h *Handler) DislikeComment(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.GetUserIDFromSession(r, h.db)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		CommentID int `json:"comment_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// ✅ DISLIKE = false
+	likes, dislikes, err := utils.ToggleCommentReaction(h.db, userID, req.CommentID, false)
+	if err != nil {
+		http.Error(w, "failed to dislike comment", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]int{
+		"likes":    likes,
+		"dislikes": dislikes,
+	})
+}
+
+//
+// ===================== CATEGORIES =====================
+//
+
+// GET /api/categories
+func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	categories, err := database.GetAllCategories(h.db)
+	if err != nil {
+		http.Error(w, "failed to load categories", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(categories)
+}
