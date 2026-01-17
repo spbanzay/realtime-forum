@@ -14,7 +14,7 @@
   --primary-dark: #1d4ed8;
   --accent: #f97316;
   --border: #e5e7eb;
-  --shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+  /* --shadow: 0 14px 40px rgba(15, 23, 42, 0.08); */
 }
 
 body {
@@ -116,7 +116,6 @@ a {
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   position: sticky;
-  top: 96px;
   align-self: start;
 }
 
