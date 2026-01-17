@@ -68,7 +68,6 @@ window.renderPost = async function ({ id }) {
                 placeholder="Share your thoughts..."
                 required
               ></textarea>
-              <p class="error form-error form-error-global" data-error-for="comment"></p>
               <button type="submit" class="btn btn-primary">Post comment</button>
             </form>
           </section>
