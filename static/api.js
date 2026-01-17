@@ -38,7 +38,10 @@ window.api = {
       headers: jsonHeaders,
       body: JSON.stringify(data),
     })
-    if (!res.ok) throw new Error("registration failed")
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || "registration failed")
+    }
   },
 
   async logout() {
