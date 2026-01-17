@@ -359,6 +359,10 @@ a {
   padding: 10px 12px;
 }
 
+.form-error:empty {
+  display: none;
+}
+
 .no-posts {
   color: var(--muted);
   background: var(--surface);
