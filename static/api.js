@@ -38,7 +38,10 @@ window.api = {
       headers: jsonHeaders,
       body: JSON.stringify(data),
     })
-    if (!res.ok) throw new Error("registration failed")
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || "registration failed")
+    }
   },
 
   async logout() {
@@ -70,7 +73,7 @@ window.api = {
 
   // GET /api/posts?id=ID
   async getPost(id) {
-    const res = await fetch(`/api/posts?id=${id}`, {
+    const res = await fetch(`/api/posts/${id}`, {
       credentials: "include",
     })
     return handleJSON(res)

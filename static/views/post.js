@@ -20,15 +20,16 @@ window.renderPost = async function ({ id }) {
         <section class="content">
 
           <!-- POST -->
-          <article class="post-card">
-            <h2>${escapeHtml(post.title)}</h2>
-
-            <div class="post-info">
-              👤 ${escapeHtml(post.username)}
-              <span>🕒 ${new Date(post.created_at).toLocaleString()}</span>
+          <article class="post-card post-detail">
+            <div class="post-header">
+              <h2>${escapeHtml(post.title)}</h2>
+              <div class="post-info">
+                <span class="meta-item">👤 ${escapeHtml(post.username)}</span>
+                <span class="meta-item">🕒 ${new Date(post.created_at).toLocaleString()}</span>
+              </div>
             </div>
 
-            <p>${escapeHtml(post.content)}</p>
+            <p class="post-body">${escapeHtml(post.content)}</p>
 
             <div class="post-tags">
               ${(post.categories || [])
@@ -36,16 +37,19 @@ window.renderPost = async function ({ id }) {
                 .join("")}
             </div>
 
-            <div class="post-footer">
-              <button id="postLikeBtn">👍 ${post.likes}</button>
-              <button id="postDislikeBtn">👎 ${post.dislikes}</button>
-              <span>💬 ${comments.length}</span>
+            <div class="post-footer post-actions">
+              <button id="postLikeBtn" class="btn btn-secondary">👍 ${post.likes}</button>
+              <button id="postDislikeBtn" class="btn btn-secondary">👎 ${post.dislikes}</button>
+              <span class="comment-count">💬 ${comments.length}</span>
             </div>
           </article>
 
           <!-- COMMENTS -->
           <section class="comments">
-            <h3>Discussion</h3>
+            <div class="comments-header">
+              <h3>Discussion</h3>
+              <span>${comments.length} messages</span>
+            </div>
 
             ${
               comments.length === 0
@@ -64,7 +68,8 @@ window.renderPost = async function ({ id }) {
                 placeholder="Share your thoughts..."
                 required
               ></textarea>
-              <button type="submit">Post comment</button>
+              <p class="error form-error form-error-global" data-error-for="comment"></p>
+              <button type="submit" class="btn btn-primary">Post comment</button>
             </form>
           </section>
 
@@ -99,8 +104,8 @@ function renderComment(comment) {
       <p>${escapeHtml(comment.content)}</p>
 
       <div class="comment-footer">
-        <button class="comment-like">👍 ${comment.likes || 0}</button>
-        <button class="comment-dislike">👎 ${comment.dislikes || 0}</button>
+        <button class="comment-like btn btn-secondary">👍 ${comment.likes || 0}</button>
+        <button class="comment-dislike btn btn-secondary">👎 ${comment.dislikes || 0}</button>
       </div>
     </div>
   `
@@ -172,6 +177,7 @@ function bindCommentLikes(rerender) {
 function bindCommentForm(postId, rerender) {
   const form = document.getElementById("commentForm")
   const input = document.getElementById("commentInput")
+  const errorEl = document.querySelector('[data-error-for="comment"]')
 
   if (!form || !input) return
 
@@ -185,7 +191,10 @@ function bindCommentForm(postId, rerender) {
       await api.createComment(postId, content)
       rerender()
     } catch (err) {
-      alert("Failed to add comment")
+      if (errorEl) {
+        errorEl.textContent = "Failed to add comment"
+        errorEl.style.display = "block"
+      }
     }
   })
 }
