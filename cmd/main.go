@@ -71,9 +71,6 @@ func main() {
 	// --- Categories ---
 	mux.HandleFunc("/api/categories", handler.GetCategories)
 
-	// Change password endpoint
-	mux.HandleFunc("/change-password", middleware.RequireAuth(handler.ChangePasswordHandler, db))
-
 	// ================= SPA ENTRY =================
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// пропускаем API и static
