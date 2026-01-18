@@ -55,6 +55,8 @@ func RunMigrations(db *sql.DB) error {
 		createPostLikesTable,
 		createCommentLikesTable,
 		createSessionsTable,
+		createMessagesTable,
+		createPresenceTable,
 		insertDefaultCategories,
 		updatePostLikesWithCascade,
 		updateCommentLikesWithCascade,
@@ -161,6 +163,28 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 `
 
+const createMessagesTable = `
+CREATE TABLE IF NOT EXISTS messages (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	from_user INTEGER NOT NULL,
+	to_user INTEGER NOT NULL,
+	content TEXT NOT NULL,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (from_user) REFERENCES users (id),
+	FOREIGN KEY (to_user) REFERENCES users (id)
+);
+`
+
+const createPresenceTable = `
+CREATE TABLE IF NOT EXISTS presence (
+	user_id INTEGER PRIMARY KEY,
+	status TEXT NOT NULL,
+	nickname TEXT,
+	updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (user_id) REFERENCES users (id)
+);
+`
+
 const insertDefaultCategories = `
 INSERT OR IGNORE INTO categories (name, description) VALUES
     ('Job Search', 'Discussions about searching for jobs and career advice'),
@@ -221,6 +245,22 @@ func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
 	return &user, nil
 }
 
+// UpdateUserPassword updates the password hash for a user
+func UpdateUserPassword(db *sql.DB, userID int, hashedPassword string) error {
+	_, err := db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hashedPassword, userID)
+	return err
+}
+
+// DeleteSessionsByUserID deletes all sessions for a given user and returns number of rows removed
+func DeleteSessionsByUserID(db *sql.DB, userID int) (int64, error) {
+	res, err := db.Exec("DELETE FROM sessions WHERE user_id = ?", userID)
+	if err != nil {
+		return 0, err
+	}
+	rows, _ := res.RowsAffected()
+	return rows, nil
+}
+
 // GetPostsByUserID retrieves all posts by a user
 func GetPostsByUserID(db *sql.DB, userID int) ([]models.Post, error) {
 	query := `
@@ -235,42 +275,38 @@ func GetPostsByUserID(db *sql.DB, userID int) ([]models.Post, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var posts []models.Post
-	for rows.Next() {
-		var post models.Post
-		err := rows.Scan(&post.ID, &post.UserID, &post.Title, &post.Content, &post.CreatedAt, &post.Username)
-		if err != nil {
-			return nil, err
-		}
+	posts, err := ScanPosts(rows)
+	if err != nil {
+		return nil, err
+	}
 
+	for i := range posts {
+		p := &posts[i]
 		// Load categories for this post
-		categories, err := GetCategoriesForPost(db, post.ID)
+		categories, err := GetCategoriesForPost(db, p.ID)
 		if err != nil {
-			log.Printf("Failed to get categories for post %d: %v", post.ID, err)
+			log.Printf("Failed to get categories for post %d: %v", p.ID, err)
 		} else {
-			post.Categories = categories
+			p.Categories = categories
 		}
 
 		// Load likes and dislikes count
-		likeCount, dislikeCount, err := GetPostLikesDislikesCount(db, post.ID)
+		likeCount, dislikeCount, err := GetPostLikesDislikesCount(db, p.ID)
 		if err != nil {
-			log.Printf("Failed to get likes/dislikes for post %d: %v", post.ID, err)
+			log.Printf("Failed to get likes/dislikes for post %d: %v", p.ID, err)
 		} else {
-			post.Likes = likeCount
-			post.Dislikes = dislikeCount
+			p.Likes = likeCount
+			p.Dislikes = dislikeCount
 		}
 
 		// Load comment count
-		commentCount, err := GetCommentCount(db, post.ID)
+		commentCount, err := GetCommentCount(db, p.ID)
 		if err != nil {
-			log.Printf("Failed to get comment count for post %d: %v", post.ID, err)
+			log.Printf("Failed to get comment count for post %d: %v", p.ID, err)
 		} else {
-			post.CommentCount = commentCount
+			p.CommentCount = commentCount
 		}
-
-		posts = append(posts, post)
 	}
 
 	return posts, nil
@@ -290,16 +326,10 @@ func GetCommentsByUserID(db *sql.DB, userID int) ([]models.Comment, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var comments []models.Comment
-	for rows.Next() {
-		var comment models.Comment
-		err := rows.Scan(&comment.ID, &comment.PostID, &comment.UserID, &comment.Content, &comment.CreatedAt, &comment.Username)
-		if err != nil {
-			return nil, err
-		}
-		comments = append(comments, comment)
+	comments, err := ScanComments(rows)
+	if err != nil {
+		return nil, err
 	}
 
 	return comments, nil
@@ -845,6 +875,67 @@ func GetAllCategories(db *sql.DB) ([]models.Category, error) {
 	}
 
 	return categories, nil
+}
+
+// Message-related functions
+
+// InsertMessage inserts a new private message and returns the new message ID and created_at
+func InsertMessage(db *sql.DB, fromUser int, toUser int, content string) (int64, string, error) {
+	query := `INSERT INTO messages (from_user, to_user, content, created_at) VALUES (?, ?, ?, datetime('now'))`
+	res, err := db.Exec(query, fromUser, toUser, content)
+	if err != nil {
+		return 0, "", err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, "", err
+	}
+
+	var createdAt string
+	err = db.QueryRow("SELECT created_at FROM messages WHERE id = ?", id).Scan(&createdAt)
+	if err != nil {
+		return id, "", err
+	}
+	return id, createdAt, nil
+}
+
+// GetMessagesBetween returns messages between two users ordered by created_at ASC with offset/limit
+func GetMessagesBetween(db *sql.DB, userA int, userB int, offset int, limit int) ([]models.Comment, error) {
+	// reuse Comment struct for lightweight message representation (id, user_id etc.)
+	query := `
+		SELECT id, from_user, to_user, content, created_at
+		FROM messages
+		WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
+		ORDER BY datetime(created_at) ASC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := db.Query(query, userA, userB, userB, userA, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var msgs []models.Comment
+	for rows.Next() {
+		var m models.Comment
+		var fromUser int
+		var toUser int
+		if err := rows.Scan(&m.ID, &fromUser, &toUser, &m.Content, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		m.UserID = fromUser
+		m.Username = "" // optional
+		msgs = append(msgs, m)
+	}
+	return msgs, nil
+}
+
+// CountMessagesBetween returns total number of messages between two users
+func CountMessagesBetween(db *sql.DB, userA int, userB int) (int, error) {
+	query := `SELECT COUNT(*) FROM messages WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)`
+	var count int
+	err := db.QueryRow(query, userA, userB, userB, userA).Scan(&count)
+	return count, err
 }
 
 // GetPostCategories returns category names for a specific post

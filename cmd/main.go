@@ -37,6 +37,12 @@ func main() {
 		),
 	)
 
+	// WebSocket endpoint for real-time private messages
+	mux.HandleFunc("/ws", handler.ServeWS)
+
+	// API endpoint for loading private messages
+	mux.HandleFunc("/api/messages", middleware.RequireAuth(handler.MessagesHandler, db))
+
 	// ================= API =================
 
 	// --- Auth ---
@@ -61,6 +67,9 @@ func main() {
 
 	// --- Categories ---
 	mux.HandleFunc("/api/categories", handler.GetCategories)
+
+	// Change password endpoint
+	mux.HandleFunc("/change-password", middleware.RequireAuth(handler.ChangePasswordHandler, db))
 
 	// ================= SPA ENTRY =================
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

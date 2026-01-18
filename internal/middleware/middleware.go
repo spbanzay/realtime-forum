@@ -56,10 +56,43 @@ func GetUserIDFromSession(r *http.Request, db *sql.DB) (int, error) {
 	return userID, nil
 }
 
+// GetUserIDFromContextOrSession tries to get userID from request context first (set by RequireAuth).
+// If not present, falls back to GetUserIDFromSession (which checks session cookie and DB).
+func GetUserIDFromContextOrSession(r *http.Request, db *sql.DB) (int, error) {
+	if v := r.Context().Value(UserIDKey); v != nil {
+		if id, ok := v.(int); ok && id != 0 {
+			return id, nil
+		}
+	}
+	return GetUserIDFromSession(r, db)
+}
+
+// IsUserLoggedIn checks if user is logged in
+func IsUserLoggedIn(r *http.Request, db *sql.DB) bool {
+	_, err := GetUserIDFromSession(r, db)
+	return err == nil
+}
+
+// RequireAuth is middleware that requires authentication
+func RequireAuth(next http.HandlerFunc, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, err := GetUserIDFromSession(r, db)
+		if err != nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		// кладём userID в контекст
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
+
+		// передаём дальше с новым контекстом
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
+
 // CreateSession создаёт новую сессию и удаляет все старые сессии этого пользователя
 func CreateSession(w http.ResponseWriter, db *sql.DB, userID int) error {
 	log.Printf("DEBUG: CreateSession started for user %d", userID)
-
 	// Стартуем транзакцию для атомарности операций
 	tx, err := db.Begin()
 	if err != nil {
