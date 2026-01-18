@@ -1,19 +1,5 @@
 // views/messages.js
 
-const chatUI = {
-  listId: "chat-widget-user-list",
-  countId: "chat-widget-count",
-  titleId: "chat-widget-title",
-  statusId: "chat-widget-status",
-  messagesId: "chat-widget-messages",
-  formId: "chat-widget-form",
-  inputId: "chat-widget-input",
-  sendId: "chat-widget-send",
-  panelId: "chat-widget-panel",
-  buttonId: "chat-widget-button",
-  badgeId: "chat-widget-badge",
-}
-
 let chatSocket = null
 let chatState = {
   users: [],
@@ -23,9 +9,6 @@ let chatState = {
   hasMore: false,
   loading: false,
   onlineUserIds: [],
-  unreadByUser: {},
-  isWidgetOpen: false,
-  widgetInitialized: false,
 }
 
 function renderMessagesPage() {
@@ -33,133 +16,31 @@ function renderMessagesPage() {
   if (!app) return
 
   app.innerHTML = `
-    <div class="chat-page-placeholder">
-      <h2>Чат открыт в виджете</h2>
-      <p>Нажмите кнопку в правом нижнем углу, чтобы открыть переписку.</p>
-    </div>
-  `
-
-  ensureChatWidget()
-  openChatWidget()
-}
-
-function ui(id) {
-  return document.getElementById(chatUI[id])
-}
-
-function ensureChatWidget() {
-  const { user } = window.state || {}
-  if (!user) {
-    teardownChatWidget()
-    return
-  }
-
-  if (chatState.widgetInitialized) {
-    return
-  }
-
-  const button = document.createElement("button")
-  button.id = chatUI.buttonId
-  button.className = "chat-widget-button"
-  button.innerHTML = `
-    💬
-    <span id="${chatUI.badgeId}" class="chat-widget-badge" hidden>0</span>
-  `
-
-  const panel = document.createElement("div")
-  panel.id = chatUI.panelId
-  panel.className = "chat-widget-panel"
-  panel.innerHTML = `
-    <div class="chat-widget-header">
-      <div>
-        <h3>Сообщения</h3>
-        <span id="${chatUI.countId}" class="chat-widget-count"></span>
-      </div>
-      <button class="chat-widget-close" type="button">×</button>
-    </div>
-    <div class="chat-widget-body">
-      <aside class="chat-widget-sidebar">
-        <div id="${chatUI.listId}" class="chat-user-list">Загрузка...</div>
+    <div class="page messages-page">
+      <aside class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <h3>Сообщения</h3>
+          <span id="chat-sidebar-count"></span>
+        </div>
+        <div id="chat-user-list" class="chat-user-list">Загрузка...</div>
       </aside>
-      <section class="chat-widget-chat">
+      <section class="chat-content">
         <div class="chat-header">
           <div>
-            <h2 id="${chatUI.titleId}">Выберите пользователя</h2>
-            <p id="${chatUI.statusId}" class="chat-status"></p>
+            <h2 id="chat-title">Выберите пользователя</h2>
+            <p id="chat-status" class="chat-status"></p>
           </div>
         </div>
-        <div id="${chatUI.messagesId}" class="chat-messages"></div>
-        <form id="${chatUI.formId}" class="chat-form">
-          <input id="${chatUI.inputId}" type="text" placeholder="Введите сообщение..." disabled />
-          <button id="${chatUI.sendId}" type="submit" class="btn btn-primary" disabled>Отправить</button>
+        <div id="chat-messages" class="chat-messages"></div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" type="text" placeholder="Введите сообщение..." disabled />
+          <button id="chat-send" type="submit" class="btn btn-primary" disabled>Отправить</button>
         </form>
       </section>
     </div>
   `
 
-  document.body.appendChild(button)
-  document.body.appendChild(panel)
-
-  button.addEventListener("click", () => {
-    if (chatState.isWidgetOpen) {
-      closeChatWidget()
-    } else {
-      openChatWidget()
-    }
-  })
-
-  panel.querySelector(".chat-widget-close").addEventListener("click", () => {
-    closeChatWidget()
-  })
-
-  chatState.widgetInitialized = true
-
   initChat()
-  renderUserList()
-}
-
-function teardownChatWidget() {
-  const button = ui("buttonId")
-  const panel = ui("panelId")
-  if (button) button.remove()
-  if (panel) panel.remove()
-
-  if (chatSocket) {
-    chatSocket.close()
-    chatSocket = null
-  }
-
-  chatState = {
-    users: [],
-    activeUserId: null,
-    messages: [],
-    offset: 0,
-    hasMore: false,
-    loading: false,
-    onlineUserIds: [],
-    unreadByUser: {},
-    isWidgetOpen: false,
-    widgetInitialized: false,
-  }
-}
-
-function openChatWidget() {
-  const panel = ui("panelId")
-  if (!panel) return
-  panel.classList.add("open")
-  chatState.isWidgetOpen = true
-  updateUnreadBadge()
-
-  if (chatState.activeUserId) {
-    clearUnread(chatState.activeUserId)
-  }
-}
-
-function closeChatWidget() {
-  const panel = ui("panelId")
-  if (!panel) return
-  panel.classList.remove("open")
-  chatState.isWidgetOpen = false
 }
 
 function initChat() {
@@ -226,14 +107,14 @@ async function loadChatUsers() {
     renderUserList()
   } catch (err) {
     console.error(err)
-    const list = ui("listId")
+    const list = document.getElementById("chat-user-list")
     if (list) list.innerHTML = "<p class='error'>Не удалось загрузить пользователей</p>"
   }
 }
 
 function renderUserList() {
-  const list = ui("listId")
-  const count = ui("countId")
+  const list = document.getElementById("chat-user-list")
+  const count = document.getElementById("chat-sidebar-count")
   if (!list) return
 
   sortChatUsers()
@@ -250,7 +131,6 @@ function renderUserList() {
       const lastMessage = user.last_message_at
         ? new Date(user.last_message_at).toLocaleString()
         : "Нет сообщений"
-      const unread = chatState.unreadByUser[user.id] || 0
       return `
         <button class="chat-user ${active}" data-user-id="${user.id}">
           <span class="chat-user-name">${escapeHtml(user.username)}</span>
@@ -259,7 +139,6 @@ function renderUserList() {
             <span>${user.status === "online" ? "В сети" : "Не в сети"}</span>
           </span>
           <span class="chat-user-last">${lastMessage}</span>
-          ${unread ? `<span class="chat-user-unread">${unread}</span>` : ""}
         </button>
       `
     })
@@ -299,20 +178,19 @@ async function selectChatUser(userId) {
   chatState.hasMore = false
 
   const user = chatState.users.find(u => u.id === userId)
-  const title = ui("titleId")
-  const status = ui("statusId")
+  const title = document.getElementById("chat-title")
+  const status = document.getElementById("chat-status")
   if (title) title.textContent = user ? user.username : "Диалог"
   if (status) status.textContent = user && user.status === "online" ? "В сети" : "Не в сети"
 
   enableChatInput(true)
-  clearUnread(userId)
   await loadMessages({ reset: true })
   renderUserList()
 }
 
 function enableChatInput(enabled) {
-  const input = ui("inputId")
-  const send = ui("sendId")
+  const input = document.getElementById("chat-input")
+  const send = document.getElementById("chat-send")
   if (input) input.disabled = !enabled
   if (send) send.disabled = !enabled
 }
@@ -342,7 +220,7 @@ async function loadMessages({ reset = false } = {}) {
 }
 
 function renderMessages({ preserveScroll = false } = {}) {
-  const container = ui("messagesId")
+  const container = document.getElementById("chat-messages")
   if (!container) return
 
   const prevHeight = container.scrollHeight
@@ -381,8 +259,8 @@ function renderMessage(message) {
 }
 
 function bindChatForm() {
-  const form = ui("formId")
-  const input = ui("inputId")
+  const form = document.getElementById("chat-form")
+  const input = document.getElementById("chat-input")
   if (!form || !input) return
 
   form.addEventListener("submit", event => {
@@ -404,7 +282,7 @@ function bindChatForm() {
 }
 
 function bindChatScroll() {
-  const container = ui("messagesId")
+  const container = document.getElementById("chat-messages")
   if (!container) return
 
   const onScroll = throttle(() => {
@@ -428,18 +306,16 @@ function handleIncomingMessage(message) {
     chatUser.last_message_at = message.created_at
   }
 
-  if (chatState.activeUserId === otherUserId && chatState.isWidgetOpen) {
+  if (chatState.activeUserId === otherUserId) {
     const shouldScroll = shouldAutoScroll()
     chatState.messages = [...chatState.messages, message]
     renderMessages({ preserveScroll: !shouldScroll })
     if (shouldScroll) {
-      const container = ui("messagesId")
+      const container = document.getElementById("chat-messages")
       if (container) {
         container.scrollTop = container.scrollHeight
       }
     }
-  } else if (message.from !== user.id) {
-    incrementUnread(otherUserId)
   }
 
   renderUserList()
@@ -451,7 +327,7 @@ function updateUserStatus(userId, status) {
     user.status = status
     renderUserList()
     if (chatState.activeUserId === user.id) {
-      const statusEl = ui("statusId")
+      const statusEl = document.getElementById("chat-status")
       if (statusEl) {
         statusEl.textContent = status === "online" ? "В сети" : "Не в сети"
       }
@@ -459,34 +335,8 @@ function updateUserStatus(userId, status) {
   }
 }
 
-function incrementUnread(userId) {
-  if (!userId) return
-  chatState.unreadByUser[userId] = (chatState.unreadByUser[userId] || 0) + 1
-  updateUnreadBadge()
-}
-
-function clearUnread(userId) {
-  if (!userId) return
-  delete chatState.unreadByUser[userId]
-  updateUnreadBadge()
-}
-
-function updateUnreadBadge() {
-  const badge = ui("badgeId")
-  if (!badge) return
-
-  const total = Object.values(chatState.unreadByUser).reduce((sum, count) => sum + count, 0)
-  if (total > 0 && !chatState.isWidgetOpen) {
-    badge.hidden = false
-    badge.textContent = String(total)
-  } else {
-    badge.hidden = true
-    badge.textContent = ""
-  }
-}
-
 function shouldAutoScroll() {
-  const container = ui("messagesId")
+  const container = document.getElementById("chat-messages")
   if (!container) return false
   const distance = container.scrollHeight - (container.scrollTop + container.clientHeight)
   return distance < 80
@@ -514,5 +364,3 @@ function throttle(fn, delay) {
 }
 
 window.renderMessages = renderMessagesPage
-window.initChatWidget = ensureChatWidget
-window.teardownChatWidget = teardownChatWidget
