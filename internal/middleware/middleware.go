@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -10,6 +11,10 @@ import (
 	"strconv"
 	"time"
 )
+
+type contextKey string
+
+const UserIDKey contextKey = "userID"
 
 // GetUserIDFromSession gets user ID from session cookie
 func GetUserIDFromSession(r *http.Request, db *sql.DB) (int, error) {
