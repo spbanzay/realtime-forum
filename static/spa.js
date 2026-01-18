@@ -16,4 +16,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   router.resolve()
+
+  if (window.state?.user && typeof window.initChatWidget === "function") {
+    window.initChatWidget()
+  }
 })
