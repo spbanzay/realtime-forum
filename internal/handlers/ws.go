@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"database/sql"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,7 +13,6 @@ import (
 	"real-time-forum/internal/middleware"
 	"real-time-forum/internal/models"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -65,13 +64,13 @@ func (h *Hub) GetOnlineUsers() []map[string]interface{} {
 	defer h.mu.RUnlock()
 	var list []map[string]interface{}
 	for id, u := range h.presence {
-		list = append(list, map[string]interface{}{"user_id": idToUUID(id), "nickname": u.Username})
+		list = append(list, map[string]interface{}{"user_id": id, "nickname": u.Username})
 	}
 	return list
 }
 
 func (h *Hub) BroadcastPresence(userID int, nickname string, status string) {
-	msg := WSMessage{"type": "presence", "user_id": idToUUID(userID), "status": status}
+	msg := WSMessage{"type": "presence", "user_id": userID, "status": status}
 	if nickname != "" {
 		msg["nickname"] = nickname
 	}
@@ -102,15 +101,6 @@ func (h *Hub) Run() {
 			}
 		}
 	}
-}
-
-// helper: convert internal int user id to UUID string representation
-// Generates a deterministic UUID based on user ID for consistent mapping
-func idToUUID(id int) string {
-	// Create a deterministic UUID based on the user ID
-	// This ensures the same user ID always maps to the same UUID
-	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // Use a fixed namespace UUID
-	return uuid.NewSHA1(namespace, []byte(fmt.Sprintf("user-%d", id))).String()
 }
 
 var upgrader = websocket.Upgrader{
@@ -152,7 +142,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	// set presence online in DB presence table
 	_, _ = db.Exec("INSERT OR REPLACE INTO presence (user_id, status, nickname, updated_at) VALUES (?, 'online', ?, datetime('now'))", userID, nickname)
 	// send INIT
-	initMsg := WSMessage{"type": "init", "user_id": idToUUID(userID), "online_users": h.GetOnlineUsers()}
+	initMsg := WSMessage{"type": "init", "user_id": userID, "online_users": h.GetOnlineUsers()}
 	client.conn.WriteJSON(initMsg)
 	// broadcast presence online
 	h.BroadcastPresence(userID, nickname, "online")
@@ -214,17 +204,11 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 		// handle incoming messages
 		if t, ok := msg["type"].(string); ok && t == "message" {
 			// expect fields: to, content
-			toStr, _ := msg["to"].(string)
+			toID, ok := parseUserID(msg["to"])
 			content, _ := msg["content"].(string)
 			// basic validation
-			if toStr == "" || content == "" {
+			if !ok || content == "" {
 				c.send <- WSMessage{"type": "error", "message": "Invalid recipient or empty content"}
-				continue
-			}
-			// convert to int id
-			toID, err := strconv.Atoi(toStr)
-			if err != nil {
-				c.send <- WSMessage{"type": "error", "message": "Invalid recipient id"}
 				continue
 			}
 
@@ -245,8 +229,8 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 			newMsg := WSMessage{
 				"type":       "message",
 				"id":         mid,
-				"from":       idToUUID(c.userID),
-				"to":         idToUUID(toID),
+				"from":       c.userID,
+				"to":         toID,
 				"content":    content,
 				"created_at": createdAt,
 			}
@@ -265,5 +249,33 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 			// unknown type
 			c.send <- WSMessage{"type": "error", "message": "Unknown message type"}
 		}
+	}
+}
+
+func parseUserID(value interface{}) (int, bool) {
+	switch v := value.(type) {
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case json.Number:
+		id, err := v.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return int(id), true
+	case string:
+		if v == "" {
+			return 0, false
+		}
+		id, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, false
+		}
+		return id, true
+	default:
+		return 0, false
 	}
 }

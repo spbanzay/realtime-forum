@@ -4,6 +4,7 @@ const routes = [
   { path: "/create-post", view: "renderCreatePost" }, 
   { path: "/my-posts", view: "renderMyPosts" },
   { path: "/liked-posts", view: "renderLikedPosts" },
+  { path: "/messages", view: "renderMessages" },
 
   { path: "/login", view: "renderLogin" },
   { path: "/register", view: "renderRegister" },

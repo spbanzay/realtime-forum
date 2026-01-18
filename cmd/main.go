@@ -12,6 +12,7 @@ import (
 
 	"real-time-forum/internal/database"
 	"real-time-forum/internal/handlers"
+	"real-time-forum/internal/middleware"
 )
 
 func main() {
@@ -42,6 +43,8 @@ func main() {
 
 	// API endpoint for loading private messages
 	mux.HandleFunc("/api/messages", middleware.RequireAuth(handler.MessagesHandler, db))
+	// API endpoint for chat roster
+	mux.HandleFunc("/api/users", middleware.RequireAuth(handler.UsersHandler, db))
 
 	// ================= API =================
 
