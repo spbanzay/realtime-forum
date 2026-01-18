@@ -30,6 +30,14 @@ window.setState = function (partial) {
     renderHeader()
   }
 
+  if (window.state.user && typeof window.initChatWidget === "function") {
+    window.initChatWidget()
+  }
+
+  if (!window.state.user && typeof window.teardownChatWidget === "function") {
+    window.teardownChatWidget()
+  }
+
   // обновляем основной view
   if (window.state.ui?.viewHtml !== undefined) {
     const app = document.getElementById("app")

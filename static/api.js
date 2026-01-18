@@ -170,4 +170,22 @@ window.api = {
     const res = await fetch("/api/categories")
     return handleJSON(res)
   },
+
+  // ================= CHAT =================
+
+  async getChatUsers() {
+    const res = await fetch("/api/users", { credentials: "include" })
+    return handleJSON(res)
+  },
+
+  async getMessages(userId, offset = 0) {
+    const params = new URLSearchParams({
+      user_id: String(userId),
+      offset: String(offset),
+    })
+    const res = await fetch(`/api/messages?${params.toString()}`, {
+      credentials: "include",
+    })
+    return handleJSON(res)
+  },
 }

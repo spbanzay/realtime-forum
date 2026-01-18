@@ -17,6 +17,7 @@ window.renderHeader = function () {
                 <a href="/create-post" data-link>Создать пост</a>
                 <a href="/my-posts" data-link>Мои посты</a>
                 <a href="/liked-posts" data-link>Понравившиеся</a>
+                <a href="/messages" data-link>Чат</a>
               </nav>
 
               <div class="user-actions">
