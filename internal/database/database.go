@@ -899,14 +899,14 @@ func InsertMessage(db *sql.DB, fromUser int, toUser int, content string) (int64,
 	return id, createdAt, nil
 }
 
-// GetMessagesBetween returns messages between two users ordered by created_at ASC with offset/limit
+// GetMessagesBetween returns messages between two users ordered by created_at DESC with offset/limit
 func GetMessagesBetween(db *sql.DB, userA int, userB int, offset int, limit int) ([]models.Comment, error) {
 	// reuse Comment struct for lightweight message representation (id, user_id etc.)
 	query := `
 		SELECT id, from_user, to_user, content, created_at
 		FROM messages
 		WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
-		ORDER BY datetime(created_at) ASC
+		ORDER BY datetime(created_at) DESC
 		LIMIT ? OFFSET ?
 	`
 	rows, err := db.Query(query, userA, userB, userB, userA, limit, offset)
@@ -928,6 +928,45 @@ func GetMessagesBetween(db *sql.DB, userA int, userB int, offset int, limit int)
 		msgs = append(msgs, m)
 	}
 	return msgs, nil
+}
+
+// ListChatUsers returns users with presence and last message timestamps for chat roster.
+func ListChatUsers(db *sql.DB, currentUserID int) ([]models.ChatUser, error) {
+	query := `
+		SELECT
+			u.id,
+			u.username,
+			COALESCE(p.status, 'offline') AS status,
+			MAX(datetime(m.created_at)) AS last_message_at
+		FROM users u
+		LEFT JOIN presence p ON p.user_id = u.id
+		LEFT JOIN messages m ON ((m.from_user = u.id AND m.to_user = ?) OR (m.from_user = ? AND m.to_user = u.id))
+		WHERE u.id != ?
+		GROUP BY u.id
+		ORDER BY
+			CASE WHEN MAX(m.created_at) IS NULL THEN 1 ELSE 0 END,
+			datetime(MAX(m.created_at)) DESC,
+			u.username COLLATE NOCASE ASC
+	`
+	rows, err := db.Query(query, currentUserID, currentUserID, currentUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.ChatUser
+	for rows.Next() {
+		var user models.ChatUser
+		var lastMessageAt sql.NullString
+		if err := rows.Scan(&user.ID, &user.Username, &user.Status, &lastMessageAt); err != nil {
+			return nil, err
+		}
+		if lastMessageAt.Valid {
+			user.LastMessageAt = lastMessageAt.String
+		}
+		out = append(out, user)
+	}
+	return out, nil
 }
 
 // CountMessagesBetween returns total number of messages between two users
