@@ -37,7 +37,30 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	h.hub.ServeWS(w, r, h.db)
 }
 
-// MessagesHandler handles GET /api/messages?user_id=UUID&offset=0&limit=10
+// UsersHandler handles GET /api/users for chat roster
+func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, err := middleware.GetUserIDFromContextOrSession(r, h.db)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	users, err := database.ListChatUsers(h.db, userID)
+	if err != nil {
+		http.Error(w, "failed to load users", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+// MessagesHandler handles GET /api/messages?user_id=ID&offset=0&limit=10
 func (h *Handler) MessagesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -96,15 +119,26 @@ func (h *Handler) MessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// build response according to contract
 	type RespMsg struct {
 		ID        int    `json:"id"`
-		From      string `json:"from"`
-		To        string `json:"to"`
+		From      int    `json:"from"`
+		To        int    `json:"to"`
 		Content   string `json:"content"`
 		CreatedAt string `json:"created_at"`
 	}
 
 	var out []RespMsg
-	for _, m := range msgs {
-		out = append(out, RespMsg{ID: m.ID, From: idToUUID(m.UserID), To: idToUUID(otherID), Content: m.Content, CreatedAt: m.CreatedAt.Format(time.RFC3339)})
+	for i := len(msgs) - 1; i >= 0; i-- {
+		m := msgs[i]
+		targetID := otherID
+		if m.UserID != userID {
+			targetID = userID
+		}
+		out = append(out, RespMsg{
+			ID:        m.ID,
+			From:      m.UserID,
+			To:        targetID,
+			Content:   m.Content,
+			CreatedAt: m.CreatedAt.Format(time.RFC3339),
+		})
 	}
 
 	resp := map[string]interface{}{"messages": out, "has_more": hasMore}

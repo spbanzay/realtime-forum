@@ -57,6 +57,14 @@ type Session struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// ChatUser represents a user in the chat roster
+type ChatUser struct {
+	ID            int    `json:"id"`
+	Username      string `json:"username"`
+	Status        string `json:"status"`
+	LastMessageAt string `json:"last_message_at,omitempty"`
+}
+
 // LikeDislike represents a like or dislike action
 type LikeDislike struct {
 	ID        int       `json:"id"`
