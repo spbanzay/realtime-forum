@@ -610,6 +610,8 @@ function markMessagesAsRead() {
   
   const currentUserId = getCurrentUserId()
   if (currentUserId === null) return
+
+  const container = document.getElementById("chat-messages")
   
   // Находим последнее сообщение ОТ СОБЕСЕДНИКА (не от нас)
   for (let i = chatState.messages.length - 1; i >= 0; i--) {
@@ -623,6 +625,12 @@ function markMessagesAsRead() {
       chatState.unreadCounts[chatState.activeUserId] = 0
       updatePageTitle()
       renderUserList() // Перерисовываем список пользователей
+      if (container) {
+        const divider = container.querySelector(".unread-divider")
+        if (divider) {
+          divider.remove()
+        }
+      }
       scheduleUnreadDividerCleanup()
       return
     }
@@ -639,6 +647,12 @@ function markMessagesAsRead() {
     chatState.unreadCounts[chatState.activeUserId] = 0
     updatePageTitle()
     renderUserList() // Перерисовываем список пользователей
+    if (container) {
+      const divider = container.querySelector(".unread-divider")
+      if (divider) {
+        divider.remove()
+      }
+    }
     scheduleUnreadDividerCleanup()
   }
 }
