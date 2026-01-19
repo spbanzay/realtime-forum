@@ -2,6 +2,10 @@ window.renderHeader = function () {
   const header = document.getElementById("header")
   if (!header) return
 
+  if (window.ensureChatMessageHandler) {
+    window.ensureChatMessageHandler()
+  }
+
   const { user } = window.state || {}
   
   // Получаем общее количество непрочитанных сообщений
@@ -9,7 +13,7 @@ window.renderHeader = function () {
   const currentPath = window.location.pathname
   const showBadge = totalUnread > 0 && currentPath !== '/messages'
   const badgeClass = showBadge ? "nav-badge" : "nav-badge is-hidden"
-  const badgeText = showBadge ? totalUnread : "0"
+  const badgeText = showBadge ? "•" : ""
 
   header.innerHTML = `
     <header class="header">
@@ -27,7 +31,7 @@ window.renderHeader = function () {
             <div class="nav-links">
               <a href="/messages" data-link class="nav-link">
                 Chats
-                <span class="${badgeClass}">${badgeText}</span>
+                <span class="${badgeClass}" aria-label="Unread messages">${badgeText}</span>
               </a>
               <a href="/liked-posts" data-link class="nav-link">Favorites</a>
               <a href="/my-posts" data-link class="nav-link">My Posts</a>

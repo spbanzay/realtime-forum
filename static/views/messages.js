@@ -99,19 +99,22 @@ function initChat() {
   }
 }
 
-function connectChatSocket() {
-  // Используем глобальный WebSocket вместо создания нового
-  if (window.websocket) {
-    chatSocket = window.websocket.getSocket()
-    
-    // Создаем обработчик для сообщений чата
+function ensureChatMessageHandler() {
+  if (!window.websocket) return
+
+  if (!messageHandler) {
     messageHandler = (payload) => {
       handleSocketMessage(payload)
     }
-    
-    // Регистрируем обработчик в глобальном WebSocket
     window.websocket.addHandler(messageHandler)
-    
+  }
+
+  chatSocket = window.websocket.getSocket()
+}
+
+function connectChatSocket() {
+  ensureChatMessageHandler()
+  if (window.websocket) {
     console.log("Используем глобальный WebSocket для чата")
   } else {
     console.warn("Глобальный WebSocket не инициализирован")
@@ -764,12 +767,6 @@ function cleanupChat() {
     unreadDividerTimeout = null
   }
   
-  // Удаляем обработчик из глобального WebSocket (но не закрываем сам WebSocket)
-  if (window.websocket && messageHandler) {
-    window.websocket.removeHandler(messageHandler)
-    messageHandler = null
-  }
-  
   chatSocket = null
   
   // Сбрасываем флаг привязки формы
@@ -786,5 +783,6 @@ window.getTotalUnreadMessages = function() {
   return Object.values(chatState.unreadCounts).reduce((sum, count) => sum + count, 0)
 }
 
+window.ensureChatMessageHandler = ensureChatMessageHandler
 window.renderMessages = renderMessagesPage
 window.cleanupMessages = cleanupChat

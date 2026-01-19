@@ -43,6 +43,9 @@ window.renderLogin = function () {
         if (window.websocket) {
           console.log("Initializing WebSocket after login...")
           window.websocket.init()
+          if (window.ensureChatMessageHandler) {
+            window.ensureChatMessageHandler()
+          }
         } else {
           console.warn("WebSocket module not loaded!")
         }
