@@ -147,6 +147,10 @@ a {
   line-height: 1;
 }
 
+.nav-badge.is-hidden {
+  visibility: hidden;
+}
+
 .nav-actions {
   display: flex;
   align-items: center;
@@ -819,6 +823,8 @@ a {
   justify-content: center;
   margin: 16px 0;
   position: relative;
+  align-self: stretch;
+  width: 100%;
 }
 
 .unread-divider::before,
