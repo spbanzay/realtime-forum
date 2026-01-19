@@ -652,6 +652,36 @@ function scheduleUnreadDividerCleanup() {
   }, UNREAD_DIVIDER_HIDE_DELAY)
 }
 
+function scheduleUnreadDividerCleanup() {
+  if (unreadDividerTimeout) {
+    clearTimeout(unreadDividerTimeout)
+  }
+
+  unreadDividerTimeout = setTimeout(() => {
+    const container = document.getElementById("chat-messages")
+    if (!container) return
+
+    const currentUserId = getCurrentUserId()
+    const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
+    const hasUnread = chatState.messages.some(msg => 
+      currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId
+    )
+
+    if (!hasUnread) {
+      if (chatState.activeUserId) {
+        chatState.unreadCounts[chatState.activeUserId] = 0
+        updatePageTitle()
+        renderUserList()
+      }
+
+      const divider = container.querySelector(".unread-divider")
+      if (divider) {
+        divider.remove()
+      }
+    }
+  }, UNREAD_DIVIDER_HIDE_DELAY)
+}
+
 function updateUserStatus(userId, status) {
   console.log("updateUserStatus called:", userId, status)
   const numUserId = Number(userId)
