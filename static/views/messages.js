@@ -21,8 +21,7 @@ let chatState = {
 function getCurrentUserId() {
   const { user } = window.state || {}
   if (!user) return null
-  const userId = Number(user.id)
-  return Number.isFinite(userId) ? userId : null
+  return Number(user.id)
 }
 
 // Загружаем сохраненные ID прочитанных сообщений из localStorage
@@ -609,6 +608,48 @@ function markMessagesAsRead() {
     renderUserList() // Перерисовываем список пользователей
     scheduleUnreadDividerCleanup()
   }
+
+  unreadDividerTimeout = setTimeout(() => {
+    const container = document.getElementById("chat-messages")
+    if (!container) return
+
+    const currentUserId = getCurrentUserId()
+    const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
+    const hasUnread = chatState.messages.some(msg => 
+      currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId
+    )
+
+    if (!hasUnread) {
+      const divider = container.querySelector(".unread-divider")
+      if (divider) {
+        divider.remove()
+      }
+    }
+  }, UNREAD_DIVIDER_HIDE_DELAY)
+}
+
+function scheduleUnreadDividerCleanup() {
+  if (unreadDividerTimeout) {
+    clearTimeout(unreadDividerTimeout)
+  }
+
+  unreadDividerTimeout = setTimeout(() => {
+    const container = document.getElementById("chat-messages")
+    if (!container) return
+
+    const { user } = window.state || {}
+    const lastReadId = chatState.lastReadMessageId[chatState.activeUserId] || 0
+    const hasUnread = chatState.messages.some(msg => 
+      user && msg.from !== user.id && msg.id > lastReadId
+    )
+
+    if (!hasUnread) {
+      const divider = container.querySelector(".unread-divider")
+      if (divider) {
+        divider.remove()
+      }
+    }
+  }, UNREAD_DIVIDER_HIDE_DELAY)
 }
 
 function scheduleUnreadDividerCleanup() {

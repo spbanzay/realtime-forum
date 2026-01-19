@@ -6,7 +6,8 @@ window.renderHeader = function () {
   
   // Получаем общее количество непрочитанных сообщений
   const totalUnread = window.getTotalUnreadMessages ? window.getTotalUnreadMessages() : 0
-  const showBadge = totalUnread > 0
+  const currentPath = window.location.pathname
+  const showBadge = totalUnread > 0 && currentPath !== '/messages'
   const badgeClass = showBadge ? "nav-badge" : "nav-badge is-hidden"
   const badgeText = showBadge ? totalUnread : "0"
 
