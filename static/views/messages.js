@@ -442,10 +442,6 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     const divider = container.querySelector(".unread-divider")
     if (divider) {
       wrapper.scrollTop = Math.max(divider.offsetTop - 24, 0)
-      if (shouldAutoScroll()) {
-        markMessagesAsRead()
-        divider.remove()
-      }
     } else {
       // Если непрочитанных нет - скроллим вниз
       wrapper.scrollTop = wrapper.scrollHeight
