@@ -189,17 +189,9 @@ async function updateUnreadCounts() {
   for (const chatUser of chatState.users) {
     const chatUserId = Number(chatUser.id)
     const lastReadId = Number(chatState.lastReadMessageId[chatUserId] || 0)
-    
-    // Загружаем последние 50 сообщений для подсчета непрочитанных
+
     try {
-      const response = await api.getMessages(chatUserId, 0)
-      const messages = Array.isArray(response.messages) ? response.messages : []
-      
-      // Считаем непрочитанные сообщения от собеседника
-      const unreadCount = messages.filter(msg => 
-        Number(msg.from) === chatUserId && msg.id > lastReadId
-      ).length
-      
+      const unreadCount = await countUnreadMessages(chatUserId, lastReadId)
       chatState.unreadCounts[chatUserId] = unreadCount
       console.log(`User ${chatUser.username}: ${unreadCount} unread messages (lastReadId: ${lastReadId})`)
     } catch (err) {
@@ -208,6 +200,41 @@ async function updateUnreadCounts() {
   }
   
   updatePageTitle()
+}
+
+async function countUnreadMessages(chatUserId, lastReadId) {
+  let offset = 0
+  let unreadCount = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const response = await api.getMessages(chatUserId, offset)
+    const messages = Array.isArray(response.messages) ? response.messages : []
+    hasMore = Boolean(response.has_more)
+
+    if (!messages.length) {
+      break
+    }
+
+    for (const msg of messages) {
+      const messageFrom = Number(msg.from)
+      const messageId = Number(msg.id)
+
+      if (messageFrom !== chatUserId) {
+        continue
+      }
+
+      if (messageId <= lastReadId) {
+        return unreadCount
+      }
+
+      unreadCount += 1
+    }
+
+    offset += messages.length
+  }
+
+  return unreadCount
 }
 
 function renderUserList() {
