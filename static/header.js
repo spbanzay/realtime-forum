@@ -36,7 +36,6 @@ window.renderHeader = function () {
             <div class="nav-actions">
               <div class="user-info">
                 <span class="username">👤 ${escapeHtml(user.username)}</span>
-                <span id="ws-status" class="ws-status" title="WebSocket status">🔴</span>
                 <button id="logoutBtn" class="btn btn-primary btn-sm">Logout</button>
               </div>
             </div>
