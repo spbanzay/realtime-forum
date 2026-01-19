@@ -16,7 +16,6 @@ function initGlobalWebSocket() {
 
   globalSocket.addEventListener("open", () => {
     console.log("WebSocket подключен")
-    updateWSStatus(true)
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout)
       reconnectTimeout = null
@@ -46,7 +45,6 @@ function initGlobalWebSocket() {
 
   globalSocket.addEventListener("close", event => {
     console.log("WebSocket отключен, код:", event.code, "причина:", event.reason)
-    updateWSStatus(false)
     globalSocket = null
     
     // Автоматическое переподключение если пользователь авторизован
@@ -62,7 +60,6 @@ function initGlobalWebSocket() {
 
   globalSocket.addEventListener("error", err => {
     console.error("WebSocket ошибка:", err)
-    updateWSStatus(false)
   })
 
   return globalSocket
@@ -108,15 +105,6 @@ function sendWebSocketMessage(data) {
   }
   console.warn("WebSocket не подключен")
   return false
-}
-
-// Обновить индикатор статуса в header
-function updateWSStatus(connected) {
-  const indicator = document.getElementById("ws-status")
-  if (indicator) {
-    indicator.textContent = connected ? "🟢" : "🔴"
-    indicator.title = connected ? "WebSocket подключен" : "WebSocket отключен"
-  }
 }
 
 // Экспорт в глобальную область
