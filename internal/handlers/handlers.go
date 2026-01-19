@@ -126,8 +126,7 @@ func (h *Handler) MessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var out []RespMsg
-	for i := len(msgs) - 1; i >= 0; i-- {
-		m := msgs[i]
+	for _, m := range msgs {
 		targetID := otherID
 		if m.UserID != userID {
 			targetID = userID

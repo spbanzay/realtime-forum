@@ -228,6 +228,11 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 				continue
 			}
 
+			createdAtRFC3339 := createdAt
+			if parsedTime, err := time.Parse("2006-01-02 15:04:05", createdAt); err == nil {
+				createdAtRFC3339 = parsedTime.UTC().Format(time.RFC3339)
+			}
+
 			// prepare new message payload
 			newMsg := WSMessage{
 				"type":       "message",
@@ -235,7 +240,7 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 				"from":       c.userID,
 				"to":         toID,
 				"content":    content,
-				"created_at": createdAt,
+				"created_at": createdAtRFC3339,
 			}
 
 			// send to recipient if online
