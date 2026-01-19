@@ -438,10 +438,19 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     const newHeight = wrapper.scrollHeight
     wrapper.scrollTop = newHeight - prevHeight + prevTop
   } else {
-    // При первой загрузке или новом сообщении скроллим вниз
-    wrapper.scrollTop = wrapper.scrollHeight
-    // Отмечаем все сообщения как прочитанные
-    markMessagesAsRead()
+    // При первой загрузке скроллим к первому непрочитанному, если он есть
+    const divider = container.querySelector(".unread-divider")
+    if (divider) {
+      wrapper.scrollTop = Math.max(divider.offsetTop - 24, 0)
+      if (shouldAutoScroll()) {
+        markMessagesAsRead()
+      }
+    } else {
+      // Если непрочитанных нет - скроллим вниз
+      wrapper.scrollTop = wrapper.scrollHeight
+      // Отмечаем все сообщения как прочитанные
+      markMessagesAsRead()
+    }
   }
 }
 
@@ -604,6 +613,8 @@ function markMessagesAsRead() {
   
   const currentUserId = getCurrentUserId()
   if (currentUserId === null) return
+
+  const container = document.getElementById("chat-messages")
   
   // Находим последнее сообщение ОТ СОБЕСЕДНИКА (не от нас)
   for (let i = chatState.messages.length - 1; i >= 0; i--) {
@@ -617,6 +628,12 @@ function markMessagesAsRead() {
       chatState.unreadCounts[chatState.activeUserId] = 0
       updatePageTitle()
       renderUserList() // Перерисовываем список пользователей
+      if (container) {
+        const divider = container.querySelector(".unread-divider")
+        if (divider) {
+          divider.remove()
+        }
+      }
       scheduleUnreadDividerCleanup()
       return
     }
@@ -633,6 +650,12 @@ function markMessagesAsRead() {
     chatState.unreadCounts[chatState.activeUserId] = 0
     updatePageTitle()
     renderUserList() // Перерисовываем список пользователей
+    if (container) {
+      const divider = container.querySelector(".unread-divider")
+      if (divider) {
+        divider.remove()
+      }
+    }
     scheduleUnreadDividerCleanup()
   }
 }
