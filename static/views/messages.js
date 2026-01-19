@@ -438,10 +438,20 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     const newHeight = wrapper.scrollHeight
     wrapper.scrollTop = newHeight - prevHeight + prevTop
   } else {
-    // При первой загрузке или новом сообщении скроллим вниз
-    wrapper.scrollTop = wrapper.scrollHeight
-    // Отмечаем все сообщения как прочитанные
-    markMessagesAsRead()
+    // При первой загрузке скроллим к первому непрочитанному, если он есть
+    const divider = container.querySelector(".unread-divider")
+    if (divider) {
+      wrapper.scrollTop = Math.max(divider.offsetTop - 24, 0)
+      if (shouldAutoScroll()) {
+        markMessagesAsRead()
+        divider.remove()
+      }
+    } else {
+      // Если непрочитанных нет - скроллим вниз
+      wrapper.scrollTop = wrapper.scrollHeight
+      // Отмечаем все сообщения как прочитанные
+      markMessagesAsRead()
+    }
   }
 }
 
