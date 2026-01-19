@@ -6,21 +6,144 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"real-time-forum/internal/database"
 	"real-time-forum/internal/middleware"
 	"real-time-forum/internal/models"
+	"real-time-forum/internal/repos"
 	"real-time-forum/internal/utils"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type Handler struct {
-	db *sql.DB
+	db    *sql.DB
+	hub   *Hub
+	repos *repos.Repos
 }
 
 func NewHandler(db *sql.DB) *Handler {
-	return &Handler{db: db}
+	adapter := repos.NewSQLiteAdapter(db)
+	r := &repos.Repos{Users: adapter, Messages: adapter, Presence: adapter}
+	h := &Handler{db: db, hub: NewHub(), repos: r}
+	// start hub run loop for safe broadcasting
+	go h.hub.Run()
+	return h
+}
+
+// ServeWS proxies WebSocket requests to the hub
+func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
+	h.hub.ServeWS(w, r, h.db)
+}
+
+// UsersHandler handles GET /api/users for chat roster
+func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, err := middleware.GetUserIDFromContextOrSession(r, h.db)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	users, err := database.ListChatUsers(h.db, userID)
+	if err != nil {
+		http.Error(w, "failed to load users", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+// MessagesHandler handles GET /api/messages?user_id=ID&offset=0&limit=10
+func (h *Handler) MessagesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// authenticate (prefer userID from context when available)
+	userID, err := middleware.GetUserIDFromContextOrSession(r, h.db)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	q := r.URL.Query()
+	other := q.Get("user_id")
+	if other == "" {
+		http.Error(w, "missing user_id", http.StatusBadRequest)
+		return
+	}
+
+	otherID, err := strconv.Atoi(other)
+	if err != nil {
+		http.Error(w, "invalid user_id", http.StatusBadRequest)
+		return
+	}
+
+	offsetStr := q.Get("offset")
+	if offsetStr == "" {
+		offsetStr = "0"
+	}
+	offset, _ := strconv.Atoi(offsetStr)
+
+	// limit fixed to 10 per requirements
+	limit := 10
+
+	// authorization check: ensure both users exist
+	if _, err := database.GetUserByID(h.db, otherID); err != nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	msgs, err := database.GetMessagesBetween(h.db, userID, otherID, offset, limit)
+	if err != nil {
+		http.Error(w, "failed to load messages", http.StatusInternalServerError)
+		return
+	}
+
+	total, err := database.CountMessagesBetween(h.db, userID, otherID)
+	if err != nil {
+		http.Error(w, "failed to load messages", http.StatusInternalServerError)
+		return
+	}
+
+	hasMore := (offset + limit) < total
+
+	// build response according to contract
+	type RespMsg struct {
+		ID        int    `json:"id"`
+		From      int    `json:"from"`
+		To        int    `json:"to"`
+		Content   string `json:"content"`
+		CreatedAt string `json:"created_at"`
+	}
+
+	var out []RespMsg
+	for i := len(msgs) - 1; i >= 0; i-- {
+		m := msgs[i]
+		targetID := otherID
+		if m.UserID != userID {
+			targetID = userID
+		}
+		out = append(out, RespMsg{
+			ID:        m.ID,
+			From:      m.UserID,
+			To:        targetID,
+			Content:   m.Content,
+			CreatedAt: m.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	resp := map[string]interface{}{"messages": out, "has_more": hasMore}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 //

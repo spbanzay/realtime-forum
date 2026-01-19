@@ -4,6 +4,7 @@ const routes = [
   { path: "/create-post", view: "renderCreatePost" }, 
   { path: "/my-posts", view: "renderMyPosts" },
   { path: "/liked-posts", view: "renderLikedPosts" },
+  { path: "/messages", view: "renderMessages" },
 
   { path: "/login", view: "renderLogin" },
   { path: "/register", view: "renderRegister" },
@@ -28,6 +29,8 @@ function matchRoute(route, path) {
 }
 
 window.router = {
+  currentPath: null,
+  
   navigate(to) {
     history.pushState({}, "", to)
     this.resolve()
@@ -44,6 +47,15 @@ window.router = {
       this.navigate("/login")
       return
     }
+
+    // Cleanup chat only when leaving messages page
+    if (this.currentPath === "/messages" && path !== "/messages") {
+      if (window.cleanupMessages && typeof window.cleanupMessages === "function") {
+        window.cleanupMessages()
+      }
+    }
+    
+    this.currentPath = path
 
     for (const r of routes) {
       const params = matchRoute(r.path, path)

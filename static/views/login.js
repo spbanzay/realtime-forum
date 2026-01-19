@@ -39,6 +39,14 @@ window.renderLogin = function () {
         const user = await api.me()
         setState({ user })
 
+        // Инициализируем глобальный WebSocket после входа
+        if (window.websocket) {
+          console.log("Initializing WebSocket after login...")
+          window.websocket.init()
+        } else {
+          console.warn("WebSocket module not loaded!")
+        }
+
         router.navigate("/")
       } catch (err) {
         console.error("Login failed", err)

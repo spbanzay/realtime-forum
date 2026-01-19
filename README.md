@@ -1,3 +1,44 @@
+# Real-Time Forum
+
+Веб-приложение форума с поддержкой приватных сообщений в реальном времени.
+
+## 🔒 Безопасность
+
+Проект реализует современные практики безопасности:
+
+- **Bcrypt** для хеширования паролей (cost=10)
+- Безопасное хранение в SQLite (только хеши, никогда сырые пароли)
+- Валидация на стороне сервера
+- Защита сессий
+
+📖 **Документация:**
+- [Быстрый старт по паролям](docs/PASSWORD_QUICKSTART.md) - краткая справка
+- [Полная документация по безопасности паролей](docs/PASSWORD_SECURITY.md)
+
+## Быстрый пример
+
+### Регистрация пользователя
+```go
+import "real-time-forum/internal/utils"
+
+// Хеширование пароля перед сохранением
+hash, err := utils.HashPassword(password)
+db.Exec("INSERT INTO users (..., password_hash) VALUES (..., ?)", hash)
+```
+
+### Логин
+```go
+// Проверка пароля при входе
+var hash string
+db.QueryRow("SELECT password_hash FROM users WHERE username = ?", username).Scan(&hash)
+
+if err := utils.VerifyPassword(hash, password); err != nil {
+    // Неверный пароль
+}
+```
+
+---
+
 # API & WebSocket Contracts
 ---
 
@@ -31,6 +72,14 @@ user_id=UUID&offset=0&limit=10
 ## WEBSOCKET CONTRACTS
 
 ### WS `/ws`
+
+Server endpoint: ws://localhost:8080/ws (requires session cookie created by login). See `internal/handlers/ws.go` for server behavior.
+
+HTTP API:
+
+GET /api/messages?user_id=UUID&offset=0&limit=10
+
+Requires authentication (session cookie). Returns JSON {messages: [...], has_more: true|false} matching contract in this README.
 
 ---
 
