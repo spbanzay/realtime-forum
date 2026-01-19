@@ -4,6 +4,8 @@ let chatSocket = null
 let chatFormBound = false
 let userListRefreshInterval = null
 let messageHandler = null // Для хранения ссылки на обработчик
+let unreadDividerTimeout = null
+const UNREAD_DIVIDER_HIDE_DELAY = 3000
 let chatState = {
   users: [],
   activeUserId: null,
@@ -14,6 +16,12 @@ let chatState = {
   onlineUserIds: [],
   unreadCounts: {}, // userId -> count непрочитанных сообщений
   lastReadMessageId: loadLastReadIds(), // userId -> ID последнего прочитанного сообщения
+}
+
+function getCurrentUserId() {
+  const { user } = window.state || {}
+  if (!user) return null
+  return Number(user.id)
 }
 
 // Загружаем сохраненные ID прочитанных сообщений из localStorage
@@ -175,26 +183,27 @@ async function loadChatUsers() {
 
 // Обновляем счетчики непрочитанных сообщений для всех пользователей
 async function updateUnreadCounts() {
-  const { user } = window.state || {}
-  if (!user) return
+  const currentUserId = getCurrentUserId()
+  if (currentUserId === null) return
   
   for (const chatUser of chatState.users) {
-    const lastReadId = chatState.lastReadMessageId[chatUser.id] || 0
+    const chatUserId = Number(chatUser.id)
+    const lastReadId = Number(chatState.lastReadMessageId[chatUserId] || 0)
     
     // Загружаем последние 50 сообщений для подсчета непрочитанных
     try {
-      const response = await api.getMessages(chatUser.id, 0)
+      const response = await api.getMessages(chatUserId, 0)
       const messages = Array.isArray(response.messages) ? response.messages : []
       
       // Считаем непрочитанные сообщения от собеседника
       const unreadCount = messages.filter(msg => 
-        msg.from === chatUser.id && msg.id > lastReadId
+        Number(msg.from) === chatUserId && msg.id > lastReadId
       ).length
       
-      chatState.unreadCounts[chatUser.id] = unreadCount
+      chatState.unreadCounts[chatUserId] = unreadCount
       console.log(`User ${chatUser.username}: ${unreadCount} unread messages (lastReadId: ${lastReadId})`)
     } catch (err) {
-      console.error(`Failed to load messages for user ${chatUser.id}:`, err)
+      console.error(`Failed to load messages for user ${chatUserId}:`, err)
     }
   }
   
@@ -360,16 +369,16 @@ function renderMessagesList({ preserveScroll = false } = {}) {
   })
 
   // Определяем ID последнего прочитанного сообщения
-  const lastReadId = chatState.lastReadMessageId[chatState.activeUserId] || 0
+  const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
   let unreadCount = 0
   let unreadStartIndex = -1
 
   console.log("Rendering messages. lastReadId:", lastReadId, "total messages:", sortedMessages.length)
 
   // Подсчитываем непрочитанные сообщения (от других пользователей)
-  const { user } = window.state || {}
+  const currentUserId = getCurrentUserId()
   sortedMessages.forEach((msg, index) => {
-    if (user && msg.from !== user.id && msg.id > lastReadId) {
+    if (currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId) {
       if (unreadStartIndex === -1) {
         unreadStartIndex = index
       }
@@ -410,9 +419,10 @@ function renderMessagesList({ preserveScroll = false } = {}) {
 }
 
 function renderMessage(message) {
-  const { user } = window.state || {}
-  const isOwn = user && message.from === user.id
-  const otherUser = chatState.users.find(u => u.id === message.from)
+  const currentUserId = getCurrentUserId()
+  const messageFrom = Number(message.from)
+  const isOwn = currentUserId !== null && messageFrom === currentUserId
+  const otherUser = chatState.users.find(u => u.id === messageFrom)
   const author = isOwn ? "Вы" : otherUser ? otherUser.username : "Пользователь"
   const timestamp = message.created_at
     ? new Date(message.created_at).toLocaleString()
@@ -479,12 +489,12 @@ function bindChatScroll() {
       // Перерисовываем для скрытия разделителя непрочитанных
       const container = document.getElementById("chat-messages")
       if (container && chatState.messages.length > 0) {
-        const { user } = window.state || {}
-        const lastReadId = chatState.lastReadMessageId[chatState.activeUserId] || 0
+        const currentUserId = getCurrentUserId()
+        const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
         
         // Проверяем, есть ли непрочитанные
         const hasUnread = chatState.messages.some(msg => 
-          user && msg.from !== user.id && msg.id > lastReadId
+          currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId
         )
         
         // Если были непрочитанные, но теперь нет - перерисовываем
@@ -501,10 +511,10 @@ function bindChatScroll() {
 async function handleIncomingMessage(message) {
   if (!message) return
 
-  const { user } = window.state || {}
-  if (!user) return
-
-  const otherUserId = message.from === user.id ? message.to : message.from
+  const currentUserId = getCurrentUserId()
+  if (currentUserId === null) return
+  const messageFrom = Number(message.from)
+  const otherUserId = messageFrom === currentUserId ? Number(message.to) : messageFrom
   let chatUser = chatState.users.find(u => u.id === otherUserId)
   
   // Если пользователь не найден в списке - загружаем список заново
@@ -518,7 +528,7 @@ async function handleIncomingMessage(message) {
   }
 
   // Если сообщение от другого пользователя и это не активный чат - увеличиваем счетчик
-  if (message.from !== user.id && chatState.activeUserId !== otherUserId) {
+  if (messageFrom !== currentUserId && chatState.activeUserId !== otherUserId) {
     chatState.unreadCounts[otherUserId] = (chatState.unreadCounts[otherUserId] || 0) + 1
     
     // Показываем уведомление в заголовке страницы
@@ -538,7 +548,7 @@ async function handleIncomingMessage(message) {
       markMessagesAsRead()
     } else {
       // Если не скроллим - увеличиваем счетчик непрочитанных
-      if (message.from !== user.id) {
+      if (messageFrom !== currentUserId) {
         chatState.unreadCounts[otherUserId] = (chatState.unreadCounts[otherUserId] || 0) + 1
         updatePageTitle()
       }
@@ -565,13 +575,13 @@ function updatePageTitle() {
 function markMessagesAsRead() {
   if (!chatState.activeUserId || chatState.messages.length === 0) return
   
-  const { user } = window.state || {}
-  if (!user) return
+  const currentUserId = getCurrentUserId()
+  if (currentUserId === null) return
   
   // Находим последнее сообщение ОТ СОБЕСЕДНИКА (не от нас)
   for (let i = chatState.messages.length - 1; i >= 0; i--) {
     const msg = chatState.messages[i]
-    if (msg.from !== user.id && msg.id) {
+    if (Number(msg.from) !== currentUserId && msg.id) {
       console.log(`Marking messages as read up to ID: ${msg.id} for user ${chatState.activeUserId}`)
       chatState.lastReadMessageId[chatState.activeUserId] = msg.id
       saveLastReadIds() // Сохраняем в localStorage
@@ -580,6 +590,7 @@ function markMessagesAsRead() {
       chatState.unreadCounts[chatState.activeUserId] = 0
       updatePageTitle()
       renderUserList() // Перерисовываем список пользователей
+      scheduleUnreadDividerCleanup()
       return
     }
   }
@@ -595,7 +606,32 @@ function markMessagesAsRead() {
     chatState.unreadCounts[chatState.activeUserId] = 0
     updatePageTitle()
     renderUserList() // Перерисовываем список пользователей
+    scheduleUnreadDividerCleanup()
   }
+}
+
+function scheduleUnreadDividerCleanup() {
+  if (unreadDividerTimeout) {
+    clearTimeout(unreadDividerTimeout)
+  }
+
+  unreadDividerTimeout = setTimeout(() => {
+    const container = document.getElementById("chat-messages")
+    if (!container) return
+
+    const currentUserId = getCurrentUserId()
+    const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
+    const hasUnread = chatState.messages.some(msg => 
+      currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId
+    )
+
+    if (!hasUnread) {
+      const divider = container.querySelector(".unread-divider")
+      if (divider) {
+        divider.remove()
+      }
+    }
+  }, UNREAD_DIVIDER_HIDE_DELAY)
 }
 
 function updateUserStatus(userId, status) {
@@ -674,6 +710,11 @@ function cleanupChat() {
   if (userListRefreshInterval) {
     clearInterval(userListRefreshInterval)
     userListRefreshInterval = null
+  }
+
+  if (unreadDividerTimeout) {
+    clearTimeout(unreadDividerTimeout)
+    unreadDividerTimeout = null
   }
   
   // Удаляем обработчик из глобального WebSocket (но не закрываем сам WebSocket)
