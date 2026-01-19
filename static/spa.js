@@ -16,6 +16,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (window.websocket) {
       window.websocket.init()
     }
+
+    if (window.ensureChatMessageHandler) {
+      window.ensureChatMessageHandler()
+    }
   } catch {
     setState({ user: null })
   }
