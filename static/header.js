@@ -8,6 +8,8 @@ window.renderHeader = function () {
   const totalUnread = window.getTotalUnreadMessages ? window.getTotalUnreadMessages() : 0
   const currentPath = window.location.pathname
   const showBadge = totalUnread > 0 && currentPath !== '/messages'
+  const badgeClass = showBadge ? "nav-badge" : "nav-badge is-hidden"
+  const badgeText = showBadge ? totalUnread : "0"
 
   header.innerHTML = `
     <header class="header">
@@ -25,7 +27,7 @@ window.renderHeader = function () {
             <div class="nav-links">
               <a href="/messages" data-link class="nav-link">
                 Chats
-                ${showBadge ? `<span class="nav-badge">${totalUnread}</span>` : ''}
+                <span class="${badgeClass}">${badgeText}</span>
               </a>
               <a href="/liked-posts" data-link class="nav-link">Favorites</a>
               <a href="/my-posts" data-link class="nav-link">My Posts</a>
