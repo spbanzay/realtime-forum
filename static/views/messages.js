@@ -189,17 +189,9 @@ async function updateUnreadCounts() {
   for (const chatUser of chatState.users) {
     const chatUserId = Number(chatUser.id)
     const lastReadId = Number(chatState.lastReadMessageId[chatUserId] || 0)
-    
-    // Загружаем последние 50 сообщений для подсчета непрочитанных
+
     try {
-      const response = await api.getMessages(chatUserId, 0)
-      const messages = Array.isArray(response.messages) ? response.messages : []
-      
-      // Считаем непрочитанные сообщения от собеседника
-      const unreadCount = messages.filter(msg => 
-        Number(msg.from) === chatUserId && msg.id > lastReadId
-      ).length
-      
+      const unreadCount = await countUnreadMessages(chatUserId, lastReadId)
       chatState.unreadCounts[chatUserId] = unreadCount
       console.log(`User ${chatUser.username}: ${unreadCount} unread messages (lastReadId: ${lastReadId})`)
     } catch (err) {
@@ -208,6 +200,41 @@ async function updateUnreadCounts() {
   }
   
   updatePageTitle()
+}
+
+async function countUnreadMessages(chatUserId, lastReadId) {
+  let offset = 0
+  let unreadCount = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const response = await api.getMessages(chatUserId, offset)
+    const messages = Array.isArray(response.messages) ? response.messages : []
+    hasMore = Boolean(response.has_more)
+
+    if (!messages.length) {
+      break
+    }
+
+    for (const msg of messages) {
+      const messageFrom = Number(msg.from)
+      const messageId = Number(msg.id)
+
+      if (messageFrom !== chatUserId) {
+        continue
+      }
+
+      if (messageId <= lastReadId) {
+        return unreadCount
+      }
+
+      unreadCount += 1
+    }
+
+    offset += messages.length
+  }
+
+  return unreadCount
 }
 
 function renderUserList() {
@@ -608,48 +635,6 @@ function markMessagesAsRead() {
     renderUserList() // Перерисовываем список пользователей
     scheduleUnreadDividerCleanup()
   }
-
-  unreadDividerTimeout = setTimeout(() => {
-    const container = document.getElementById("chat-messages")
-    if (!container) return
-
-    const currentUserId = getCurrentUserId()
-    const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
-    const hasUnread = chatState.messages.some(msg => 
-      currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId
-    )
-
-    if (!hasUnread) {
-      const divider = container.querySelector(".unread-divider")
-      if (divider) {
-        divider.remove()
-      }
-    }
-  }, UNREAD_DIVIDER_HIDE_DELAY)
-}
-
-function scheduleUnreadDividerCleanup() {
-  if (unreadDividerTimeout) {
-    clearTimeout(unreadDividerTimeout)
-  }
-
-  unreadDividerTimeout = setTimeout(() => {
-    const container = document.getElementById("chat-messages")
-    if (!container) return
-
-    const { user } = window.state || {}
-    const lastReadId = chatState.lastReadMessageId[chatState.activeUserId] || 0
-    const hasUnread = chatState.messages.some(msg => 
-      user && msg.from !== user.id && msg.id > lastReadId
-    )
-
-    if (!hasUnread) {
-      const divider = container.querySelector(".unread-divider")
-      if (divider) {
-        divider.remove()
-      }
-    }
-  }, UNREAD_DIVIDER_HIDE_DELAY)
 }
 
 function scheduleUnreadDividerCleanup() {
@@ -668,12 +653,6 @@ function scheduleUnreadDividerCleanup() {
     )
 
     if (!hasUnread) {
-      if (chatState.activeUserId) {
-        chatState.unreadCounts[chatState.activeUserId] = 0
-        updatePageTitle()
-        renderUserList()
-      }
-
       const divider = container.querySelector(".unread-divider")
       if (divider) {
         divider.remove()
