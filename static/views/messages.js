@@ -171,11 +171,25 @@ async function loadChatUsers() {
       console.log("No onlineUserIds yet, rendering with API statuses")
       renderUserList()
     }
+
+    await ensureActiveChatSelection()
   } catch (err) {
     console.error("Error loading chat users:", err)
     const list = document.getElementById("chat-user-list")
     if (list) list.innerHTML = "<p class='error'>Не удалось загрузить пользователей</p>"
   }
+}
+
+async function ensureActiveChatSelection() {
+  if (!chatState.users.length) return
+
+  const hasActiveUser = chatState.activeUserId !== null
+    && chatState.users.some(user => user.id === chatState.activeUserId)
+
+  if (hasActiveUser) return
+
+  const firstUserId = chatState.users[0].id
+  await selectChatUser(firstUserId)
 }
 
 // Обновляем счетчики непрочитанных сообщений для всех пользователей
