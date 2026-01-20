@@ -31,7 +31,7 @@ window.renderHeader = function () {
             <div class="nav-links">
               <a href="/messages" data-link class="nav-link">
                 Chats
-                <span class="${badgeClass}" aria-label="Unread messages">${badgeText}</span>
+                <span class="${badgeClass}" aria-label="Unread messages"></span>
               </a>
               <a href="/liked-posts" data-link class="nav-link">Favorites</a>
               <a href="/my-posts" data-link class="nav-link">My Posts</a>

@@ -58,8 +58,6 @@ func RunMigrations(db *sql.DB) error {
 		createMessagesTable,
 		createPresenceTable,
 		insertDefaultCategories,
-		updatePostLikesWithCascade,
-		updateCommentLikesWithCascade,
 	}
 
 	for _, migration := range migrations {
@@ -1143,52 +1141,3 @@ func AddCategoryToPost(db *sql.DB, postID, categoryID int) error {
 	`, postID, categoryID)
 	return err
 }
-
-// Миграции для добавления CASCADE DELETE
-const updatePostLikesWithCascade = `
--- Пересоздаем таблицу post_likes с CASCADE DELETE
-DROP TABLE IF EXISTS post_likes_temp;
-CREATE TABLE post_likes_temp (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    is_like BOOLEAN NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(post_id, user_id),
-    FOREIGN KEY (post_id) REFERENCES posts (id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-);
-
--- Копируем данные из старой таблицы
-INSERT OR IGNORE INTO post_likes_temp (id, post_id, user_id, is_like, created_at)
-SELECT id, post_id, user_id, is_like, created_at FROM post_likes 
-WHERE post_id IN (SELECT id FROM posts) AND user_id IN (SELECT id FROM users);
-
--- Заменяем таблицы
-DROP TABLE post_likes;
-ALTER TABLE post_likes_temp RENAME TO post_likes;
-`
-
-const updateCommentLikesWithCascade = `
--- Пересоздаем таблицу comment_likes с CASCADE DELETE
-DROP TABLE IF EXISTS comment_likes_temp;
-CREATE TABLE comment_likes_temp (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    comment_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    is_like BOOLEAN NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(comment_id, user_id),
-    FOREIGN KEY (comment_id) REFERENCES comments (id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-);
-
--- Копируем данные из старой таблицы
-INSERT OR IGNORE INTO comment_likes_temp (id, comment_id, user_id, is_like, created_at)
-SELECT id, comment_id, user_id, is_like, created_at FROM comment_likes 
-WHERE comment_id IN (SELECT id FROM comments) AND user_id IN (SELECT id FROM users);
-
--- Заменяем таблицы
-DROP TABLE comment_likes;
-ALTER TABLE comment_likes_temp RENAME TO comment_likes;
-`

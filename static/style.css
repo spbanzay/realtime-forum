@@ -80,7 +80,7 @@ a {
 
 .nav-links {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 32px;
   flex-wrap: nowrap;
 }
@@ -132,7 +132,7 @@ a {
 }
 
 .nav-badge {
-  display: inline-flex;
+  /* display: inline-flex; */
   align-items: center;
   justify-content: center;
   min-width: 18px;
@@ -146,6 +146,7 @@ a {
   margin-left: 6px;
   line-height: 1;
 }
+
 
 .nav-badge.is-hidden {
   visibility: hidden;
