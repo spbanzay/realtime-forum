@@ -742,18 +742,6 @@ a {
   min-height: 0;
 }
 
-.chat-header {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 12px;
-  margin-bottom: 16px;
-}
-
-.chat-status {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
 .chat-messages-wrapper {
   flex: 1;
   overflow-y: auto;

@@ -57,12 +57,6 @@ function renderMessagesPage() {
         <div id="chat-user-list" class="chat-user-list">Downloading...</div>
       </aside>
       <section class="chat-content">
-        <div class="chat-header">
-          <div>
-            <h2 id="chat-title">Choose a user</h2>
-            <p id="chat-status" class="chat-status"></p>
-          </div>
-        </div>
         <div id="chat-messages-wrapper" class="chat-messages-wrapper">
           <div id="chat-loading-indicator" class="chat-loading-indicator" style="display: none;">
             <span>Loading earlier messages...</span>
@@ -166,9 +160,6 @@ async function loadChatUsers() {
     
     chatState.users = newUsers
     
-    // Пересчитываем количество непрочитанных для каждого пользователя
-    await updateUnreadCounts()
-    
     // Всегда применяем актуальный список онлайн пользователей из WebSocket
     if (chatState.onlineUserIds.length > 0) {
       console.log("Applying presence from onlineUserIds:", chatState.onlineUserIds)
@@ -177,11 +168,24 @@ async function loadChatUsers() {
       console.log("No onlineUserIds yet, rendering with API statuses")
       renderUserList()
     }
+
+    await ensureActiveChatSelection()
+    updateUnreadCounts()
   } catch (err) {
     console.error("Error loading chat users:", err)
     const list = document.getElementById("chat-user-list")
     if (list) list.innerHTML = "<p class='error'>Не удалось загрузить пользователей</p>"
   }
+}
+
+async function ensureActiveChatSelection() {
+  if (!chatState.users.length) return
+
+  const hasActiveUser = chatState.activeUserId !== null
+    && chatState.users.some(user => user.id === chatState.activeUserId)
+
+  const targetUserId = hasActiveUser ? chatState.activeUserId : chatState.users[0].id
+  await selectChatUser(targetUserId)
 }
 
 // Обновляем счетчики непрочитанных сообщений для всех пользователей
@@ -313,10 +317,6 @@ async function selectChatUser(userId) {
   // updatePageTitle()
 
   const user = chatState.users.find(u => u.id === userId)
-  const title = document.getElementById("chat-title")
-  const status = document.getElementById("chat-status")
-  if (title) title.textContent = user ? user.username : "Диалог"
-  if (status) status.textContent = user && user.status === "online" ? "Online" : "Offline"
 
   // Разрешаем ввод только если пользователь онлайн
   const isOnline = user && user.status === "online"
@@ -716,10 +716,6 @@ function updateUserStatus(userId, status) {
     user.status = status
     renderUserList()
     if (chatState.activeUserId === user.id) {
-      const statusEl = document.getElementById("chat-status")
-      if (statusEl) {
-        statusEl.textContent = status === "online" ? "Online" : "Offline"
-      }
       // Обновляем доступность поля ввода при изменении статуса
       enableChatInput(status === "online")
     }
@@ -771,6 +767,7 @@ function cleanupChat() {
   
   // Сбрасываем флаг привязки формы
   chatFormBound = false
+  chatState.loading = false
   
   // НЕ сбрасываем счетчики - они нужны для отображения в header
   // chatState.unreadCounts = {}
