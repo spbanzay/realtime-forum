@@ -626,6 +626,14 @@ a {
   font-family: inherit;
 }
 
+.post-form .categories {
+  margin-bottom: 16px;
+}
+
+.post-form .btn {
+  margin-top: 8px;
+}
+
 /* ===== CHAT ===== */
 .messages-page {
   height: calc(100vh - 160px);
@@ -935,18 +943,21 @@ a {
 @media (max-width: 768px) {
   /* Чат-страница: вертикальный layout */
   .messages-page {
+    display: flex;
+    flex-direction: column;
     grid-template-columns: 1fr;
-    height: auto;
-    min-height: calc(100vh - 160px);
+    height: calc(100dvh - 160px);
+    min-height: calc(100dvh - 160px);
   }
 
   .chat-sidebar {
     max-height: 40vh;
-    min-height: 300px;
+    min-height: 0;
   }
 
   .chat-content {
-    min-height: 50vh;
+    flex: 1;
+    min-height: 0;
   }
 
   .chat-user {
