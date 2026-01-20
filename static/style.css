@@ -1168,3 +1168,10 @@ a {
     font-size: 0.85rem;
   }
 }
+
+/* FIX: allow scroll inside chat on mobile */
+.messages-page,
+.chat-content,
+.chat-messages-wrapper {
+  min-height: 0;
+}
