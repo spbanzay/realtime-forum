@@ -330,6 +330,7 @@ async function selectChatUser(userId) {
   
   await loadMessages({ reset: true })
   renderUserList()
+  updateChatEmptyState()
 }
 
 function enableChatInput(enabled) {
