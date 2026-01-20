@@ -170,7 +170,6 @@ async function loadChatUsers() {
     }
 
     await ensureActiveChatSelection()
-    updateUnreadCounts()
   } catch (err) {
     console.error("Error loading chat users:", err)
     const list = document.getElementById("chat-user-list")
@@ -184,8 +183,10 @@ async function ensureActiveChatSelection() {
   const hasActiveUser = chatState.activeUserId !== null
     && chatState.users.some(user => user.id === chatState.activeUserId)
 
-  const targetUserId = hasActiveUser ? chatState.activeUserId : chatState.users[0].id
-  await selectChatUser(targetUserId)
+  if (hasActiveUser) return
+
+  const firstUserId = chatState.users[0].id
+  await selectChatUser(firstUserId)
 }
 
 // Обновляем счетчики непрочитанных сообщений для всех пользователей
