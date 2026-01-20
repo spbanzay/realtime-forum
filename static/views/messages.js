@@ -771,6 +771,7 @@ function cleanupChat() {
   
   // Сбрасываем флаг привязки формы
   chatFormBound = false
+  chatState.loading = false
   
   // НЕ сбрасываем счетчики - они нужны для отображения в header
   // chatState.unreadCounts = {}
