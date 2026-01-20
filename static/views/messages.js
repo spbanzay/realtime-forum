@@ -57,12 +57,6 @@ function renderMessagesPage() {
         <div id="chat-user-list" class="chat-user-list">Downloading...</div>
       </aside>
       <section class="chat-content">
-        <div class="chat-header">
-          <div>
-            <h2 id="chat-title">Choose a user</h2>
-            <p id="chat-status" class="chat-status"></p>
-          </div>
-        </div>
         <div id="chat-messages-wrapper" class="chat-messages-wrapper">
           <div id="chat-loading-indicator" class="chat-loading-indicator" style="display: none;">
             <span>Loading earlier messages...</span>
@@ -313,10 +307,6 @@ async function selectChatUser(userId) {
   // updatePageTitle()
 
   const user = chatState.users.find(u => u.id === userId)
-  const title = document.getElementById("chat-title")
-  const status = document.getElementById("chat-status")
-  if (title) title.textContent = user ? user.username : "Диалог"
-  if (status) status.textContent = user && user.status === "online" ? "Online" : "Offline"
 
   // Разрешаем ввод только если пользователь онлайн
   const isOnline = user && user.status === "online"
@@ -716,10 +706,6 @@ function updateUserStatus(userId, status) {
     user.status = status
     renderUserList()
     if (chatState.activeUserId === user.id) {
-      const statusEl = document.getElementById("chat-status")
-      if (statusEl) {
-        statusEl.textContent = status === "online" ? "Online" : "Offline"
-      }
       // Обновляем доступность поля ввода при изменении статуса
       enableChatInput(status === "online")
     }
