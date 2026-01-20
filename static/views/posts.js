@@ -77,6 +77,19 @@ async function renderPostsPage({ title, filter }) {
     bindPostEvents(user)
   }
 
+  if (window.websocket) {
+    if (window.postsRealtimeHandler) {
+      window.websocket.removeHandler(window.postsRealtimeHandler)
+    }
+
+    window.postsRealtimeHandler = payload => {
+      if (payload?.type !== "post_created") return
+      if (!document.getElementById("posts")) return
+      loadPosts()
+    }
+    window.websocket.addHandler(window.postsRealtimeHandler)
+  }
+
   loadPosts()
 }
 

@@ -82,6 +82,14 @@ func (h *Hub) BroadcastPresence(userID int, nickname string, status string) {
 	}
 }
 
+func (h *Hub) Broadcast(msg WSMessage) {
+	select {
+	case h.broadcast <- msg:
+	default:
+		// drop if broadcast channel is full to avoid blocking
+	}
+}
+
 // Run listens on broadcast channel and dispatches messages to clients safely.
 func (h *Hub) Run() {
 	for msg := range h.broadcast {

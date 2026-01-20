@@ -388,6 +388,10 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if post, err := database.GetPostByID(h.db, postID); err == nil {
+		h.hub.Broadcast(WSMessage{"type": "post_created", "post": post})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{"id": postID})
 }
