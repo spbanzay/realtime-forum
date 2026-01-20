@@ -5,7 +5,6 @@ let chatFormBound = false
 let userListRefreshInterval = null
 let messageHandler = null // Для хранения ссылки на обработчик
 let unreadDividerTimeout = null
-const UNREAD_DIVIDER_HIDE_DELAY = 3000
 let chatState = {
   users: [],
   activeUserId: null,
@@ -63,6 +62,9 @@ function renderMessagesPage() {
           </div>
           <div id="chat-messages" class="chat-messages"></div>
         </div>
+        <div id="chat-empty-state" class="chat-empty-state" hidden>
+          Выберите диалог, чтобы начать общение
+        </div>
         <form id="chat-form" class="chat-form">
           <input id="chat-input" type="text" placeholder="Enter a message..." disabled />
           <button id="chat-send" type="submit" class="btn btn-primary" disabled>Send</button>
@@ -84,6 +86,7 @@ function initChat() {
     bindChatScroll()
     chatFormBound = true
   }
+  updateChatEmptyState()
   
   // Периодически обновляем список пользователей (каждые 30 секунд)
   if (!userListRefreshInterval) {
@@ -178,15 +181,16 @@ async function loadChatUsers() {
 }
 
 async function ensureActiveChatSelection() {
-  if (!chatState.users.length) return
+  if (!chatState.users.length) {
+    resetActiveChat()
+    return
+  }
 
   const hasActiveUser = chatState.activeUserId !== null
     && chatState.users.some(user => user.id === chatState.activeUserId)
 
   if (hasActiveUser) return
-
-  const firstUserId = chatState.users[0].id
-  await selectChatUser(firstUserId)
+  resetActiveChat()
 }
 
 // Обновляем счетчики непрочитанных сообщений для всех пользователей
@@ -322,6 +326,7 @@ async function selectChatUser(userId) {
   // Разрешаем ввод только если пользователь онлайн
   const isOnline = user && user.status === "online"
   enableChatInput(isOnline)
+  updateChatEmptyState()
   
   await loadMessages({ reset: true })
   renderUserList()
@@ -335,6 +340,33 @@ function enableChatInput(enabled) {
   }
   if (send) {
     send.disabled = !enabled
+  }
+}
+
+function resetActiveChat() {
+  chatState.activeUserId = null
+  chatState.messages = []
+  chatState.offset = 0
+  chatState.hasMore = false
+  enableChatInput(false)
+
+  const container = document.getElementById("chat-messages")
+  if (container) {
+    container.innerHTML = ""
+  }
+
+  updateChatEmptyState()
+}
+
+function updateChatEmptyState() {
+  const emptyState = document.getElementById("chat-empty-state")
+  const wrapper = document.getElementById("chat-messages-wrapper")
+  const hasActiveUser = chatState.activeUserId !== null
+  if (emptyState) {
+    emptyState.hidden = hasActiveUser
+  }
+  if (wrapper) {
+    wrapper.hidden = !hasActiveUser
   }
 }
 
@@ -665,24 +697,7 @@ function scheduleUnreadDividerCleanup() {
   if (unreadDividerTimeout) {
     clearTimeout(unreadDividerTimeout)
   }
-
-  unreadDividerTimeout = setTimeout(() => {
-    const container = document.getElementById("chat-messages")
-    if (!container) return
-
-    const currentUserId = getCurrentUserId()
-    const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
-    const hasUnread = chatState.messages.some(msg => 
-      currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId
-    )
-
-    if (!hasUnread) {
-      const divider = container.querySelector(".unread-divider")
-      if (divider) {
-        divider.remove()
-      }
-    }
-  }, UNREAD_DIVIDER_HIDE_DELAY)
+  unreadDividerTimeout = null
 }
 
 function updateUserStatus(userId, status) {
