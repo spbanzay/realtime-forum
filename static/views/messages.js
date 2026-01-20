@@ -63,7 +63,7 @@ function renderMessagesPage() {
           <div id="chat-messages" class="chat-messages"></div>
         </div>
         <div id="chat-empty-state" class="chat-empty-state" hidden>
-          Выберите диалог, чтобы начать общение.
+          Выберите диалог, чтобы начать общение
         </div>
         <form id="chat-form" class="chat-form">
           <input id="chat-input" type="text" placeholder="Enter a message..." disabled />
@@ -365,11 +365,9 @@ function updateChatEmptyState() {
   const hasActiveUser = chatState.activeUserId !== null
   if (emptyState) {
     emptyState.hidden = hasActiveUser
-    emptyState.style.display = hasActiveUser ? "none" : "flex"
   }
   if (wrapper) {
     wrapper.hidden = !hasActiveUser
-    wrapper.style.display = hasActiveUser ? "flex" : "none"
   }
 }
 
