@@ -160,9 +160,6 @@ async function loadChatUsers() {
     
     chatState.users = newUsers
     
-    // Пересчитываем количество непрочитанных для каждого пользователя
-    await updateUnreadCounts()
-    
     // Всегда применяем актуальный список онлайн пользователей из WebSocket
     if (chatState.onlineUserIds.length > 0) {
       console.log("Applying presence from onlineUserIds:", chatState.onlineUserIds)
