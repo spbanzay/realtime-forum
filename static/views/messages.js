@@ -186,8 +186,10 @@ async function ensureActiveChatSelection() {
   const hasActiveUser = chatState.activeUserId !== null
     && chatState.users.some(user => user.id === chatState.activeUserId)
 
-  const targetUserId = hasActiveUser ? chatState.activeUserId : chatState.users[0].id
-  await selectChatUser(targetUserId)
+  if (hasActiveUser) return
+
+  const firstUserId = chatState.users[0].id
+  await selectChatUser(firstUserId)
 }
 
 // Обновляем счетчики непрочитанных сообщений для всех пользователей
