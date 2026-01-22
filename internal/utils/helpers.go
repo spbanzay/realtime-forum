@@ -2,6 +2,7 @@ package utils
 
 import (
 	"database/sql"
+	"fmt"
 	"html/template"
 	"regexp"
 	"strings"
@@ -335,17 +336,16 @@ func ToggleCommentReaction(
 	}
 
 	if err != nil {
-		return
+		return 0, 0, err
 	}
 
-	db.QueryRow(`
-		SELECT
-			COALESCE(SUM(CASE WHEN is_like = 1 THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN is_like = 0 THEN 1 ELSE 0 END), 0)
-		FROM comment_likes
-		WHERE comment_id = ?`,
-		commentID,
-	).Scan(&likes, &dislikes)
+	err = db.QueryRow(`
+		SELECT 
+            (SELECT COUNT(*) FROM comment_likes WHERE comment_id = ? AND is_like = 1),
+            (SELECT COUNT(*) FROM comment_likes WHERE comment_id = ? AND is_like = 0)
+    `, commentID, commentID).Scan(&likes, &dislikes)
 
-	return
+	// ЭТОТ ЛОГ ПОМОЖЕТ НАМ УВИДЕТЬ РЕЗУЛЬТАТ В ТЕРМИНАЛЕ
+	fmt.Printf("DEBUG: Comment %d updated. Now Likes: %d, Dislikes: %d\n", commentID, likes, dislikes)
+	return likes, dislikes, err
 }

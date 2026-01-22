@@ -8,31 +8,31 @@ window.renderRegister = function () {
           <form id="registerForm">
             <div class="form-group">
               <label>Email</label>
-              <input type="email" id="email" required />
+              <input type="email" id="email" name="email" required />
               <p class="error form-error" data-error-for="email"></p>
             </div>
 
             <div class="form-group">
               <label>Username</label>
-              <input type="text" id="username" required />
+              <input type="text" id="username" name="username" required />
               <p class="error form-error" data-error-for="username"></p>
             </div>
 
             <div class="form-group">
               <label>Password</label>
-              <input type="password" id="password" required />
+              <input type="password" id="password" name="password" required />
               <p class="error form-error" data-error-for="password"></p>
             </div>
 
             <div class="form-group">
               <label>Age</label>
-              <input type="number" id="age" required min="16" />
+              <input type="number" id="age" name="age" required min="13" max="120" />
               <p class="error form-error" data-error-for="age"></p>
             </div>
 
             <div class="form-group">
               <label>Gender</label>
-              <select id="gender">
+              <select id="gender" name="gender" required>
                 <option value="">Select gender</option>
                 <option value="female">Female</option>
                 <option value="male">Male</option>
@@ -44,13 +44,13 @@ window.renderRegister = function () {
 
             <div class="form-group">
               <label>First name</label>
-              <input type="text" id="first_name" />
+              <input type="text" id="first_name" name="first_name" required />
               <p class="error form-error" data-error-for="first_name"></p>
             </div>
 
             <div class="form-group">
               <label>Last name</label>
-              <input type="text" id="last_name" />
+              <input type="text" id="last_name" name="last_name" required />
               <p class="error form-error" data-error-for="last_name"></p>
             </div>
 
@@ -70,35 +70,37 @@ window.renderRegister = function () {
     }
   })
 
+  // Инициализируем валидацию для новой формы
+  if (window.initFormValidation) {
+    window.initFormValidation();
+  }
+
   document
     .getElementById("registerForm")
     .addEventListener("submit", async (e) => {
       e.preventDefault()
       clearRegisterErrors()
 
+      const formData = {
+        email: document.getElementById("email").value.trim(),
+        username: document.getElementById("username").value.trim(),
+        password: document.getElementById("password").value,
+        age: Number(document.getElementById("age").value),
+        gender: document.getElementById("gender").value,
+        first_name: document.getElementById("first_name").value.trim(),
+        last_name: document.getElementById("last_name").value.trim(),
+      }
+
+      console.log("Отправляем данные регистрации:", formData)
+
       try {
-        await api.register({
-          email: document.getElementById("email").value.trim(),
-          username: document.getElementById("username").value.trim(),
-          password: document.getElementById("password").value,
-          age: Number(document.getElementById("age").value),
-          gender: document.getElementById("gender").value,
-          first_name: document.getElementById("first_name").value.trim(),
-          last_name: document.getElementById("last_name").value.trim(),
-        })
+        await api.register(formData)
 
         router.navigate("/login")
       } catch (err) {
         console.error("Registration failed", err)
-        const message =
-          err?.message === "email exists"
-            ? "Email already registered"
-            : err?.message === "username exists"
-              ? "Username already taken"
-              : err?.message === "invalid data"
-                ? "Check email, username (3-20 chars), and age (16+)"
-                : "Registration failed"
-        showRegisterError(err?.message, message)
+        // Используем специальный контекст 'register' для детальной обработки ошибок
+        window.handleApiError(err, 'register')
       }
     })
 }

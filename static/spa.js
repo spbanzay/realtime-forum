@@ -1,4 +1,9 @@
 document.addEventListener("DOMContentLoaded", async () => {
+  // Стартуем WebSocket сразу, чтобы гости тоже получали трансляции
+  if (window.websocket) {
+    window.websocket.init({ forceReconnect: true })
+  }
+
   // SPA links
   document.body.addEventListener("click", e => {
     const link = e.target.closest("a[data-link]")
@@ -12,9 +17,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const me = await api.me()
     setState({ user: me })
     
-    // Инициализируем глобальный WebSocket при входе
+    // Инициализируем глобальный WebSocket с текущей сессией
     if (window.websocket) {
-      window.websocket.init()
+      window.websocket.init({ forceReconnect: true })
     }
 
     if (window.ensureChatMessageHandler) {
@@ -22,6 +27,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   } catch {
     setState({ user: null })
+
+    // Гостевое соединение для публичных событий в реальном времени
+    if (window.websocket) {
+      window.websocket.init({ forceReconnect: true })
+    }
   }
 
   router.resolve()

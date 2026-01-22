@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -173,7 +174,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if !utils.IsValidEmail(req.Email) ||
 		!utils.IsValidUsername(req.Username) ||
-		req.Age < 16 {
+		req.Age < 13 {
 		http.Error(w, "invalid data", http.StatusBadRequest)
 		return
 	}
@@ -221,7 +222,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	err := h.db.QueryRow(`
 		SELECT id, username, password_hash
 		FROM users
-		WHERE email = ? OR username = ?`,
+		WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)`,
 		req.Identifier, req.Identifier,
 	).Scan(&user.ID, &user.Username, &user.PasswordHash)
 
@@ -437,7 +438,7 @@ func (h *Handler) Comments(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = h.db.Exec(`
+		res, err := h.db.Exec(`
 			INSERT INTO comments (post_id, user_id, content, created_at)
 			VALUES (?, ?, ?, datetime('now'))`,
 			req.PostID, userID, req.Content,
@@ -446,6 +447,18 @@ func (h *Handler) Comments(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, "failed to create comment", http.StatusInternalServerError)
 			return
+		}
+
+		commentID, _ := res.LastInsertId()
+		comment, _ := database.GetCommentByID(h.db, int(commentID))
+		commentCount, _ := database.GetCommentCount(h.db, req.PostID)
+		if comment != nil {
+			h.hub.Broadcast(WSMessage{
+				"type":          "comment_created",
+				"post_id":       req.PostID,
+				"comment_count": commentCount,
+				"comment":       comment,
+			})
 		}
 
 		w.WriteHeader(http.StatusCreated)
@@ -483,6 +496,14 @@ func (h *Handler) LikePost(w http.ResponseWriter, r *http.Request) {
 		"likes":    likes,
 		"dislikes": dislikes,
 	})
+
+	// broadcast updated counters to everyone
+	h.hub.Broadcast(WSMessage{
+		"type":     "post_reaction",
+		"post_id":  req.PostID,
+		"likes":    likes,
+		"dislikes": dislikes,
+	})
 }
 
 // POST /api/posts/dislike
@@ -509,12 +530,22 @@ func (h *Handler) DislikePost(w http.ResponseWriter, r *http.Request) {
 		"likes":    likes,
 		"dislikes": dislikes,
 	})
+
+	// broadcast updated counters to everyone
+	h.hub.Broadcast(WSMessage{
+		"type":     "post_reaction",
+		"post_id":  req.PostID,
+		"likes":    likes,
+		"dislikes": dislikes,
+	})
 }
 
 // POST /api/comments/like
 func (h *Handler) LikeComment(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("LOG: LikeComment handler started")
 	userID, err := middleware.GetUserIDFromSession(r, h.db)
 	if err != nil {
+		fmt.Println("LOG: Auth error in LikeComment:", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -522,7 +553,13 @@ func (h *Handler) LikeComment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CommentID int `json:"comment_id"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		fmt.Println("LOG: Decode error:", err) // И ЭТО
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Printf("LOG: Calling ToggleCommentReaction for user %d, comment %d\n", userID, req.CommentID)
 
 	// ✅ LIKE = true
 	likes, dislikes, err := utils.ToggleCommentReaction(h.db, userID, req.CommentID, true)
@@ -535,6 +572,17 @@ func (h *Handler) LikeComment(w http.ResponseWriter, r *http.Request) {
 		"likes":    likes,
 		"dislikes": dislikes,
 	})
+
+	if comment, err := database.GetCommentByID(h.db, req.CommentID); err == nil && comment != nil {
+		h.hub.Broadcast(WSMessage{
+			"type":       "comment_reaction",
+			"post_id":    comment.PostID,
+			"comment_id": req.CommentID,
+			"likes":      likes,
+			"dislikes":   dislikes,
+			"comment":    comment,
+		})
+	}
 }
 
 // POST /api/comments/dislike
@@ -561,6 +609,17 @@ func (h *Handler) DislikeComment(w http.ResponseWriter, r *http.Request) {
 		"likes":    likes,
 		"dislikes": dislikes,
 	})
+
+	if comment, err := database.GetCommentByID(h.db, req.CommentID); err == nil && comment != nil {
+		h.hub.Broadcast(WSMessage{
+			"type":       "comment_reaction",
+			"post_id":    comment.PostID,
+			"comment_id": req.CommentID,
+			"likes":      likes,
+			"dislikes":   dislikes,
+			"comment":    comment,
+		})
+	}
 }
 
 //

@@ -5,7 +5,19 @@ let messageHandlers = []
 let reconnectTimeout = null
 
 // Инициализация WebSocket соединения
-function initGlobalWebSocket() {
+// options: { forceReconnect?: boolean }
+function initGlobalWebSocket(options = {}) {
+  const { forceReconnect = false } = options
+
+  if (forceReconnect && globalSocket) {
+    try {
+      globalSocket.close()
+    } catch (e) {
+      console.warn("Force closing socket failed", e)
+    }
+    globalSocket = null
+  }
+
   if (globalSocket && (globalSocket.readyState === WebSocket.OPEN || globalSocket.readyState === WebSocket.CONNECTING)) {
     console.log("WebSocket уже подключен")
     return globalSocket
@@ -47,8 +59,8 @@ function initGlobalWebSocket() {
     console.log("WebSocket отключен, код:", event.code, "причина:", event.reason)
     globalSocket = null
     
-    // Автоматическое переподключение если пользователь авторизован
-    if (window.state?.user && !reconnectTimeout) {
+    // Автоматическое переподключение для всех клиентов
+    if (!reconnectTimeout) {
       console.log("Переподключение через 2 секунды...")
       reconnectTimeout = setTimeout(() => {
         reconnectTimeout = null

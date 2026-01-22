@@ -84,14 +84,31 @@ class FormValidator {
     }
 
     init() {
+        // Отложенная инициализация для динамически создаваемых форм
+        this.bindExistingForms();
+        
+        // Отслеживаем добавление новых форм
+        const observer = new MutationObserver(() => {
+            this.bindExistingForms();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    bindExistingForms() {
         // Remove HTML5 validation and add custom validation
         document.querySelectorAll('form').forEach(form => {
+            if (form.dataset.validatorBound) return; // Не привязываем повторно
+            form.dataset.validatorBound = 'true';
+            
             form.noValidate = true;
             form.addEventListener('submit', this.handleSubmit.bind(this));
         });
 
         // Real-time validation
         document.querySelectorAll('input, textarea, select').forEach(field => {
+            if (field.dataset.validatorBound) return; // Не привязываем повторно
+            field.dataset.validatorBound = 'true';
+            
             field.addEventListener('blur', this.validateField.bind(this));
             field.addEventListener('input', this.clearFieldError.bind(this));
         });
@@ -109,7 +126,7 @@ class FormValidator {
         });
 
         // Custom validations
-        if (form.id === 'create-post-form') {
+        if (form.id === 'createPostForm') {
             const categories = form.querySelectorAll('input[name="categories"]:checked');
             if (categories.length === 0) {
                 this.showFieldError(form.querySelector('.category-selection'), 'Please select at least one category for your post.');
@@ -140,9 +157,15 @@ class FormValidator {
 
         // Type-specific validations
         if (value && field.type === 'email') {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const emailRegex = /^[a-zA-Z0-9._-]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(value)) {
-                errorMessage = 'Please enter a valid email address.';
+                errorMessage = 'Please enter a valid email address using only English letters, numbers, dots, underscores, and hyphens before @ symbol.';
+                isValid = false;
+            }
+            // Проверяем часть до @
+            const localPart = value.split('@')[0];
+            if (localPart && !/^[a-zA-Z0-9._-]+$/.test(localPart)) {
+                errorMessage = 'Email address before @ can only contain English letters, numbers, dots, underscores, and hyphens.';
                 isValid = false;
             }
         }
@@ -171,19 +194,25 @@ class FormValidator {
             } else if (value.length > 120) {
                 errorMessage = 'Title cannot exceed 120 characters.';
                 isValid = false;
+            } else if (!/^[a-zA-Z0-9 _.,!?()-]+$/.test(value)) {
+                errorMessage = 'Title can only contain English letters, numbers, spaces, and common punctuation marks.';
+                isValid = false;
             }
         }
 
           if (field.name === 'content' && value) {
         // Проверяем, находится ли поле в форме комментария
         const form = field.closest('form');
-        if (form && form.action.includes('/create-comment')) {
+        if (form && (form.action && form.action.includes('/create-comment') || form.id === 'commentForm')) {
             // Валидация для комментариев
             if (value.length < 1) {
                 errorMessage = 'Comment content must contain at least 1 character.';
                 isValid = false;
             } else if (value.length > 1000) {
                 errorMessage = 'Comment content cannot exceed 1000 characters.';
+                isValid = false;
+            } else if (!/^[a-zA-Z0-9 _.,!?()\n\r-]+$/.test(value)) {
+                errorMessage = 'Comment can only contain English letters, numbers, spaces, and common punctuation marks.';
                 isValid = false;
             }
         } else {
@@ -193,6 +222,9 @@ class FormValidator {
                 isValid = false;
             } else if (value.length > 5000) {
                 errorMessage = 'Content cannot exceed 5000 characters.';
+                isValid = false;
+            } else if (!/^[a-zA-Z0-9 _.,!?()\n\r-]+$/.test(value)) {
+                errorMessage = 'Post content can only contain English letters, numbers, spaces, and common punctuation marks.';
                 isValid = false;
             }
         }
@@ -206,7 +238,7 @@ class FormValidator {
                 errorMessage = 'Username cannot exceed 20 characters.';
                 isValid = false;
             } else if (!/^[a-zA-Z0-9 _-]+$/.test(value)) {
-                errorMessage = 'Username can only contain letters, numbers, spaces, underscores, and hyphens.';
+                errorMessage = 'Username can only contain English letters, numbers, spaces, underscores, and hyphens.';
                 isValid = false;
             }
         }
@@ -220,6 +252,66 @@ class FormValidator {
                 isValid = false;
             } else if (value.length > 72) {
                 errorMessage = 'Password is too long (maximum 72 characters).';
+                isValid = false;
+            }
+        }
+
+        if (field.name === 'age' && value) {
+            const age = parseInt(value);
+            if (isNaN(age)) {
+                errorMessage = 'Please enter a valid age.';
+                isValid = false;
+            } else if (age < 13) {
+                errorMessage = 'You must be at least 13 years old to register.';
+                isValid = false;
+            } else if (age > 120) {
+                errorMessage = 'Please enter a valid age (maximum 120 years).';
+                isValid = false;
+            }
+        }
+
+        if (field.name === 'gender' && field.hasAttribute('required') && !value) {
+            errorMessage = 'Please select your gender.';
+            isValid = false;
+        }
+
+        if (field.id === 'gender' && field.hasAttribute('required') && !value) {
+            errorMessage = 'Please select your gender.';
+            isValid = false;
+        }
+
+        if (field.name === 'first_name' && field.hasAttribute('required') && !value) {
+            errorMessage = 'First name is required for work forum registration.';
+            isValid = false;
+        } else if (field.name === 'first_name' && value) {
+            if (value.length < 2 || value.length > 50) {
+                errorMessage = 'First name must be between 2 and 50 characters.';
+                isValid = false;
+            } else if (!/^[a-zA-Z0-9 _-]+$/.test(value)) {
+                errorMessage = 'First name can only contain English letters, numbers, spaces, underscores, and hyphens.';
+                isValid = false;
+            }
+        }
+
+        if (field.name === 'last_name' && field.hasAttribute('required') && !value) {
+            errorMessage = 'Last name is required for work forum registration.';
+            isValid = false;
+        } else if (field.name === 'last_name' && value) {
+            if (value.length < 2 || value.length > 50) {
+                errorMessage = 'Last name must be between 2 and 50 characters.';
+                isValid = false;
+            } else if (!/^[a-zA-Z0-9 _-]+$/.test(value)) {
+                errorMessage = 'Last name can only contain English letters, numbers, spaces, underscores, and hyphens.';
+                isValid = false;
+            }
+        }
+
+        if (field.name === 'message' && value) {
+            if (value.length > 500) {
+                errorMessage = 'Message cannot exceed 500 characters.';
+                isValid = false;
+            } else if (!/^[a-zA-Z0-9 _.,!?()\n\r-]+$/.test(value)) {
+                errorMessage = 'Message can only contain English letters, numbers, spaces, and common punctuation marks.';
                 isValid = false;
             }
         }
@@ -270,5 +362,12 @@ class FormValidator {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    new FormValidator();
+    window.formValidator = new FormValidator();
 });
+
+// Глобальная функция для инициализации валидации форм (для динамических форм)
+window.initFormValidation = function() {
+    if (window.formValidator) {
+        window.formValidator.bindExistingForms();
+    }
+};

@@ -43,9 +43,18 @@ function saveLastReadIds() {
   }
 }
 
-function renderMessagesPage() {
+function renderMessagesPage(params) {
   const app = document.getElementById("app")
   if (!app) return
+
+  // Извлекаем userId из параметров URL (/messages/123 -> 123)
+  const targetUserId = params && params.id ? Number(params.id) : null;
+
+  // Валидация targetUserId для обработки 400 ошибок
+  if (targetUserId !== null && (isNaN(targetUserId) || targetUserId <= 0)) {
+    window.renderError(400, "Invalid user ID")
+    return
+  }
 
   app.innerHTML = `
     <div class="page messages-page">
@@ -61,40 +70,62 @@ function renderMessagesPage() {
           <div id="chat-loading-indicator" class="chat-loading-indicator" style="display: none;">
             <span>Loading earlier messages...</span>
           </div>
-          <div id="chat-messages" class="chat-messages"></div>
+          <div id="chat-messages" class="chat-messages">
+             ${!targetUserId ? '<div class="chat-placeholder">Select a user to start chatting</div>' : ''}
+          </div>
         </div>
         <form id="chat-form" class="chat-form">
-          <input id="chat-input" type="text" placeholder="Enter a message..." disabled />
+          <input id="chat-input" name="message" type="text" placeholder="Enter a message..." disabled />
           <button id="chat-send" type="submit" class="btn btn-primary" disabled>Send</button>
         </form>
       </section>
     </div>
   `
 
+  // Инициализируем чат и передаем ID, если он есть в URL
   setTimeout(() => {
-    initChat()
+    initChat(targetUserId)
   }, 0)
 }
 
-function initChat() {
-  connectChatSocket()
-  loadChatUsers()
-  if (!chatFormBound) {
-    bindChatForm()
-    bindChatScroll()
-    chatFormBound = true
-  }
-  
-  // Периодически обновляем список пользователей (каждые 30 секунд)
-  if (!userListRefreshInterval) {
-    userListRefreshInterval = setInterval(() => {
-      loadChatUsers()
-    }, 30000)
+async function initChat(targetUserId = null) {
+  try {
+    connectChatSocket();
+    
+    // Добавляем await, чтобы дождаться загрузки списка пользователей
+    // и только потом пытаться открыть конкретный чат
+    await loadChatUsers(targetUserId);
+
+    if (!chatFormBound) {
+      bindChatForm();
+      bindChatScroll();
+      chatFormBound = true;
+      
+      // Инициализируем валидацию для формы чата
+      if (window.initFormValidation) {
+        window.initFormValidation();
+      }
+    }
+    
+    if (!userListRefreshInterval) {
+      userListRefreshInterval = setInterval(() => {
+        // При фоновом обновлении нам не нужно передавать ID, 
+        // чтобы не "перепрыгивать" в чат каждые 30 сек
+        loadChatUsers(); 
+      }, 30000);
+    }
+  } catch (err) {
+    console.error("Error initializing chat:", err);
+    // Если ошибка произошла при инициализации чата - показываем ошибку загрузки страницы
+    window.handleApiError(err, 'navigation');
   }
 }
 
 function ensureChatMessageHandler() {
   if (!window.websocket) return
+
+  // гарантируем подключение (важно после forceReconnect или для восстановления)
+  window.websocket.init()
 
   if (!messageHandler) {
     messageHandler = (payload) => {
@@ -151,30 +182,35 @@ function applyPresence(onlineUsers) {
   renderUserList()
 }
 
-async function loadChatUsers() {
+async function loadChatUsers(targetUserId = null) {
   try {
-    console.log("Loading chat users from API...")
-    const users = await api.getChatUsers()
-    const newUsers = Array.isArray(users) ? users : []
-    console.log("Received users from API:", newUsers)
+    const users = await api.getChatUsers();
+    chatState.users = Array.isArray(users) ? users : [];
     
-    chatState.users = newUsers
+    await updateUnreadCounts();
     
-    // Пересчитываем количество непрочитанных для каждого пользователя
-    await updateUnreadCounts()
-    
-    // Всегда применяем актуальный список онлайн пользователей из WebSocket
+    // Отрисовка списка
     if (chatState.onlineUserIds.length > 0) {
-      console.log("Applying presence from onlineUserIds:", chatState.onlineUserIds)
-      applyPresence(chatState.onlineUserIds.map(id => ({ user_id: id })))
+      applyPresence(chatState.onlineUserIds.map(id => ({ user_id: id })));
     } else {
-      console.log("No onlineUserIds yet, rendering with API statuses")
-      renderUserList()
+      renderUserList();
+    }
+
+    // ЛОГИКА ОШИБОК
+    if (targetUserId) {
+      const user = chatState.users.find(u => u.id === targetUserId);
+      if (!user) {
+        // ОШИБКА 404: если ID в ссылке есть, а юзера в списке нет
+        window.renderError(404, "User not found in your contacts");
+        return;
+      }
+      // Если юзер найден — открываем с ним чат
+      selectChatUser(targetUserId);
     }
   } catch (err) {
-    console.error("Error loading chat users:", err)
-    const list = document.getElementById("chat-user-list")
-    if (list) list.innerHTML = "<p class='error'>Не удалось загрузить пользователей</p>"
+    console.error("Critical error loading users:", err);
+    // ОШИБКА 500: если сервер не ответил или упал
+    window.handleApiError(err, 'navigation');
   }
 }
 
@@ -205,30 +241,36 @@ async function countUnreadMessages(chatUserId, lastReadId) {
   let hasMore = true
 
   while (hasMore) {
-    const response = await api.getMessages(chatUserId, offset)
-    const messages = Array.isArray(response.messages) ? response.messages : []
-    hasMore = Boolean(response.has_more)
+    try {
+      const response = await api.getMessages(chatUserId, offset)
+      const messages = Array.isArray(response.messages) ? response.messages : []
+      hasMore = Boolean(response.has_more)
 
-    if (!messages.length) {
+      if (!messages.length) {
+        break
+      }
+
+      for (const msg of messages) {
+        const messageFrom = Number(msg.from)
+        const messageId = Number(msg.id)
+
+        if (messageFrom !== chatUserId) {
+          continue
+        }
+
+        if (messageId <= lastReadId) {
+          return unreadCount
+        }
+
+        unreadCount += 1
+      }
+
+      offset += messages.length
+    } catch (err) {
+      console.error(`Failed to load messages for user ${chatUserId}:`, err)
+      // Для фоновых запросов не показываем ошибку, просто прерываем подсчёт
       break
     }
-
-    for (const msg of messages) {
-      const messageFrom = Number(msg.from)
-      const messageId = Number(msg.id)
-
-      if (messageFrom !== chatUserId) {
-        continue
-      }
-
-      if (messageId <= lastReadId) {
-        return unreadCount
-      }
-
-      unreadCount += 1
-    }
-
-    offset += messages.length
   }
 
   return unreadCount
@@ -276,7 +318,7 @@ function renderUserList() {
   list.querySelectorAll(".chat-user").forEach(button => {
     button.addEventListener("click", () => {
       const userId = Number(button.dataset.userId)
-      selectChatUser(userId)
+      window.router.navigate(`/messages/${userId}`)
     })
   })
 }
@@ -359,6 +401,8 @@ async function loadMessages({ reset = false } = {}) {
     renderMessagesList({ preserveScroll: !reset })
   } catch (err) {
     console.error(err)
+    // Для ошибок загрузки сообщений показываем Toast
+    window.handleApiError(err, 'action')
   } finally {
     chatState.loading = false
     // Скрываем индикатор загрузки
@@ -475,27 +519,59 @@ function bindChatForm() {
     
     // Используем глобальный WebSocket
     const ws = window.websocket ? window.websocket.getSocket() : null
-    if (!chatState.activeUserId || !ws || ws.readyState !== WebSocket.OPEN) return
+    if (!chatState.activeUserId) {
+      window.showError("Ошибка: не выбран пользователь для чата")
+      return
+    }
+    
+    if (!ws) {
+      window.showError("Соединение WebSocket не установлено. Попробуйте обновить страницу.")
+      return
+    }
+    
+    if (ws.readyState !== WebSocket.OPEN) {
+      window.showError("Соединение не активно. Попробуйте позже.")
+      return
+    }
     
     // Проверяем, что пользователь онлайн
     const activeUser = chatState.users.find(u => u.id === chatState.activeUserId)
     if (!activeUser || activeUser.status !== "online") {
-      alert("Вы можете отправлять сообщения только пользователям, которые онлайн")
+      window.showWarning("Вы можете отправлять сообщения только пользователям, которые онлайн")
       return
     }
     
     const content = input.value.trim()
-    if (!content) return
+    if (!content) {
+      window.showWarning("Сообщение не может быть пустым")
+      return
+    }
+    
+    // Проверяем допустимые символы в сообщении
+    if (!/^[a-zA-Z0-9 _.,!?()нр-]+$/.test(content)) {
+      window.showError('Message can only contain English letters, numbers, spaces, and common punctuation marks.')
+      return
+    }
+    
+    // Проверяем длину сообщения
+    if (content.length > 500) {
+      window.showError('Message cannot exceed 500 characters.')
+      return
+    }
 
-    ws.send(
-      JSON.stringify({
-        type: "message",
-        to: chatState.activeUserId,
-        content,
-      })
-    )
-
-    input.value = ""
+    try {
+      ws.send(
+        JSON.stringify({
+          type: "message",
+          to: chatState.activeUserId,
+          content,
+        })
+      )
+      input.value = ""
+    } catch (err) {
+      console.error("Ошибка отправки сообщения:", err)
+      window.showError("Не удалось отправить сообщение. Попробуйте ещё раз.")
+    }
   })
 }
 

@@ -29,18 +29,21 @@ type Client struct {
 // Hub maintains active clients and broadcasts
 type Hub struct {
 	mu      sync.RWMutex
-	clients map[int]*Client // map userID -> client
+	clients map[int]*Client // map userID (auth or guest) -> client
 	// presence info cached in memory
 	presence map[int]models.User
 	// broadcast channel for safe message dispatch
 	broadcast chan WSMessage
+	// monotonically decreasing guest IDs (-1, -2, ...)
+	nextGuestID int
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:   make(map[int]*Client),
-		presence:  make(map[int]models.User),
-		broadcast: make(chan WSMessage, 64),
+		clients:     make(map[int]*Client),
+		presence:    make(map[int]models.User),
+		broadcast:   make(chan WSMessage, 64),
+		nextGuestID: -1,
 	}
 }
 
@@ -48,15 +51,28 @@ func (h *Hub) AddClient(c *Client, nickname string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.clients[c.userID] = c
-	// update presence
-	h.presence[c.userID] = models.User{ID: c.userID, Username: nickname}
+	if c.userID > 0 {
+		// update presence only for authenticated users
+		h.presence[c.userID] = models.User{ID: c.userID, Username: nickname}
+	}
 }
 
 func (h *Hub) RemoveClient(userID int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.clients, userID)
-	delete(h.presence, userID)
+	if userID > 0 {
+		delete(h.presence, userID)
+	}
+}
+
+// allocateGuestID returns a unique negative ID for unauthenticated viewers.
+func (h *Hub) allocateGuestID() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	id := h.nextGuestID
+	h.nextGuestID--
+	return id
 }
 
 func (h *Hub) GetOnlineUsers() []map[string]interface{} {
@@ -124,12 +140,9 @@ var upgrader = websocket.Upgrader{
 
 // ServeWS handles websocket connections
 func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	// authenticate
+	// authenticate (guests are allowed for realtime updates)
 	userID, err := middleware.GetUserIDFromSession(r, db)
-	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
+	authenticated := err == nil
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -137,11 +150,16 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		return
 	}
 
-	// fetch user nickname
-	user, _ := database.GetUserByID(db, userID)
+	// fetch user nickname when authenticated
 	nickname := ""
-	if user != nil {
-		nickname = user.Username
+	if authenticated {
+		user, _ := database.GetUserByID(db, userID)
+		if user != nil {
+			nickname = user.Username
+		}
+	} else {
+		// assign a unique negative ID for guest viewers
+		userID = h.allocateGuestID()
 	}
 
 	client := &Client{userID: userID, conn: conn, send: make(chan WSMessage, 16)}
@@ -149,13 +167,18 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	log.Printf("WebSocket: user %s (ID:%d) connected", nickname, userID)
 
-	// set presence online in DB presence table
-	_, _ = db.Exec("INSERT OR REPLACE INTO presence (user_id, status, nickname, updated_at) VALUES (?, 'online', ?, datetime('now'))", userID, nickname)
-	// send INIT
+	if authenticated {
+		// set presence online in DB presence table
+		_, _ = db.Exec("INSERT OR REPLACE INTO presence (user_id, status, nickname, updated_at) VALUES (?, 'online', ?, datetime('now'))", userID, nickname)
+	}
+
+	// send INIT (even to guests so the client knows socket is ready)
 	initMsg := WSMessage{"type": "init", "user_id": userID, "online_users": h.GetOnlineUsers()}
 	client.conn.WriteJSON(initMsg)
-	// broadcast presence online
-	h.BroadcastPresence(userID, nickname, "online")
+	// broadcast presence online for authenticated users only
+	if authenticated {
+		h.BroadcastPresence(userID, nickname, "online")
+	}
 
 	// start writer and reader
 	go h.writerLoop(client)
@@ -193,8 +216,10 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 	defer func() {
 		// on disconnect
 		h.RemoveClient(c.userID)
-		db.Exec("UPDATE presence SET status='offline', updated_at = datetime('now') WHERE user_id = ?", c.userID)
-		h.BroadcastPresence(c.userID, "", "offline")
+		if c.userID > 0 {
+			db.Exec("UPDATE presence SET status='offline', updated_at = datetime('now') WHERE user_id = ?", c.userID)
+			h.BroadcastPresence(c.userID, "", "offline")
+		}
 		log.Printf("WebSocket: user ID:%d disconnected", c.userID)
 		c.conn.Close()
 	}()
@@ -210,6 +235,12 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 		var msg WSMessage
 		if err := c.conn.ReadJSON(&msg); err != nil {
 			return
+		}
+
+		if c.userID <= 0 {
+			// guests cannot send commands over websocket
+			c.send <- WSMessage{"type": "error", "message": "Unauthorized websocket action"}
+			continue
 		}
 
 		// handle incoming messages

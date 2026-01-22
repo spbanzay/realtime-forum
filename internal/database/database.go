@@ -58,6 +58,7 @@ func RunMigrations(db *sql.DB) error {
 		createMessagesTable,
 		createPresenceTable,
 		insertDefaultCategories,
+		createCaseInsensitiveIndexes,
 	}
 
 	for _, migration := range migrations {
@@ -193,11 +194,16 @@ INSERT OR IGNORE INTO categories (name, description) VALUES
     ('Internships', 'Internship opportunities and experiences');
 `
 
+const createCaseInsensitiveIndexes = `
+CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username));
+`
+
 // Database functions for user profile management
 
 // GetUserByUsername retrieves a user by username
 func GetUserByUsername(db *sql.DB, username string) (*models.User, error) {
-	query := "SELECT id, email, username, password_hash, age, gender, first_name, last_name, created_at FROM users WHERE username = ?"
+	query := "SELECT id, email, username, password_hash, age, gender, first_name, last_name, created_at FROM users WHERE LOWER(username) = LOWER(?)"
 	row := db.QueryRow(query, username)
 
 	var user models.User
@@ -410,6 +416,30 @@ func GetCommentsByPostID(db *sql.DB, postID int) ([]models.Comment, error) {
 	}
 
 	return comments, nil
+}
+
+// GetCommentByID returns a single comment with aggregated reaction counters.
+func GetCommentByID(db *sql.DB, commentID int) (*models.Comment, error) {
+	var c models.Comment
+	err := db.QueryRow(`
+		SELECT c.id, c.post_id, c.user_id, u.username, c.content, c.created_at
+		FROM comments c
+		JOIN users u ON c.user_id = u.id
+		WHERE c.id = ?
+	`, commentID).Scan(&c.ID, &c.PostID, &c.UserID, &c.Username, &c.Content, &c.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	db.QueryRow(`
+		SELECT
+			COALESCE(SUM(CASE WHEN is_like = 1 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN is_like = 0 THEN 1 ELSE 0 END), 0)
+		FROM comment_likes
+		WHERE comment_id = ?
+	`, commentID).Scan(&c.Likes, &c.Dislikes)
+
+	return &c, nil
 }
 
 // GetUserPostCount gets the total number of posts by a user
@@ -1119,7 +1149,7 @@ func TerminateAllOtherSessions(db *sql.DB, currentSessionID string, userID int) 
 func EmailExists(db *sql.DB, email string) (bool, error) {
 	var count int
 	err := db.QueryRow(
-		"SELECT COUNT(*) FROM users WHERE email = ?",
+		"SELECT COUNT(*) FROM users WHERE LOWER(email) = LOWER(?)",
 		email,
 	).Scan(&count)
 	return count > 0, err
@@ -1128,7 +1158,7 @@ func EmailExists(db *sql.DB, email string) (bool, error) {
 func UsernameExists(db *sql.DB, username string) (bool, error) {
 	var count int
 	err := db.QueryRow(
-		"SELECT COUNT(*) FROM users WHERE username = ?",
+		"SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)",
 		username,
 	).Scan(&count)
 	return count > 0, err
