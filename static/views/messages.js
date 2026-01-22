@@ -464,10 +464,11 @@ function renderMessagesList({ preserveScroll = false } = {}) {
   const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
   let unreadCount = 0
   let unreadStartIndex = -1
+  const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
 
   console.log("Rendering messages. lastReadId:", lastReadId, "total messages:", sortedMessages.length)
 
-  // Подсчитываем непрочитанные сообщения (от других пользователей)
+  // Подсчитываем непрочитанные сообщения (от других пользователей) в загруженном окне
   const currentUserId = getCurrentUserId()
   sortedMessages.forEach((msg, index) => {
     if (currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId) {
@@ -479,15 +480,34 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     }
   })
 
+  if (unreadStartIndex === -1 && totalUnread > 0 && currentUserId !== null) {
+    let remainingUnread = totalUnread
+    for (let index = sortedMessages.length - 1; index >= 0; index -= 1) {
+      const msg = sortedMessages[index]
+      if (Number(msg.from) !== currentUserId) {
+        remainingUnread -= 1
+        if (remainingUnread === 0) {
+          unreadStartIndex = index
+          break
+        }
+      }
+    }
+    if (unreadStartIndex !== -1) {
+      unreadCount = totalUnread
+    }
+  }
+
+  const dividerCount = unreadStartIndex !== -1 ? (totalUnread > 0 ? totalUnread : unreadCount) : 0
+
   // Рендерим сообщения с разделителем непрочитанных
   const messagesHTML = sortedMessages.map((message, index) => {
     let html = ''
     
     // Добавляем разделитель перед первым непрочитанным сообщением
-    if (index === unreadStartIndex && unreadCount > 0) {
+    if (index === unreadStartIndex && dividerCount > 0) {
       html += `
         <div class="unread-divider">
-          <span>${unreadCount} непрочитанн${unreadCount === 1 ? 'ое' : unreadCount < 5 ? 'ых' : 'ых'} сообщени${unreadCount === 1 ? 'е' : 'й'}</span>
+          <span>${dividerCount} непрочитанн${dividerCount === 1 ? 'ое' : dividerCount < 5 ? 'ых' : 'ых'} сообщени${dividerCount === 1 ? 'е' : 'й'}</span>
         </div>
       `
     }
@@ -507,6 +527,9 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     const divider = container.querySelector(".unread-divider")
     if (divider) {
       wrapper.scrollTop = Math.max(divider.offsetTop - 24, 0)
+      if (wrapper.scrollHeight <= wrapper.clientHeight) {
+        markMessagesAsRead()
+      }
     } else {
       // Если непрочитанных нет - скроллим вниз
       wrapper.scrollTop = wrapper.scrollHeight
