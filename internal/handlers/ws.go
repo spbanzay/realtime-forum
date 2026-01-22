@@ -29,7 +29,7 @@ type Client struct {
 // Hub maintains active clients and broadcasts
 type Hub struct {
 	mu      sync.RWMutex
-	clients map[int]map[*Client]struct{} // map userID (auth or guest) -> set of clients
+	clients map[int]*Client // map userID (auth or guest) -> client
 	// presence info cached in memory
 	presence map[int]models.User
 	// broadcast channel for safe message dispatch
@@ -40,44 +40,30 @@ type Hub struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:     make(map[int]map[*Client]struct{}),
+		clients:     make(map[int]*Client),
 		presence:    make(map[int]models.User),
 		broadcast:   make(chan WSMessage, 64),
 		nextGuestID: -1,
 	}
 }
 
-func (h *Hub) AddClient(c *Client, nickname string) (bool, int) {
+func (h *Hub) AddClient(c *Client, nickname string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.clients[c.userID] == nil {
-		h.clients[c.userID] = make(map[*Client]struct{})
-	}
-	_, alreadyOnline := h.presence[c.userID]
-	h.clients[c.userID][c] = struct{}{}
+	h.clients[c.userID] = c
 	if c.userID > 0 {
 		// update presence only for authenticated users
 		h.presence[c.userID] = models.User{ID: c.userID, Username: nickname}
 	}
-	return !alreadyOnline, len(h.clients[c.userID])
 }
 
-func (h *Hub) RemoveClient(c *Client) (bool, int) {
+func (h *Hub) RemoveClient(userID int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	clients, ok := h.clients[c.userID]
-	if !ok {
-		return true, 0
+	delete(h.clients, userID)
+	if userID > 0 {
+		delete(h.presence, userID)
 	}
-	delete(clients, c)
-	if len(clients) == 0 {
-		delete(h.clients, c.userID)
-		if c.userID > 0 {
-			delete(h.presence, c.userID)
-		}
-		return true, 0
-	}
-	return false, len(clients)
 }
 
 // allocateGuestID returns a unique negative ID for unauthenticated viewers.
@@ -126,10 +112,8 @@ func (h *Hub) Run() {
 		// Capture clients under read lock, then send without holding lock to avoid blocking other ops
 		h.mu.RLock()
 		clients := make([]*Client, 0, len(h.clients))
-		for _, bucket := range h.clients {
-			for c := range bucket {
-				clients = append(clients, c)
-			}
+		for _, c := range h.clients {
+			clients = append(clients, c)
 		}
 		h.mu.RUnlock()
 
@@ -179,7 +163,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	}
 
 	client := &Client{userID: userID, conn: conn, send: make(chan WSMessage, 16)}
-	wasFirstPresence, _ := h.AddClient(client, nickname)
+	h.AddClient(client, nickname)
 
 	log.Printf("WebSocket: user %s (ID:%d) connected", nickname, userID)
 
@@ -192,7 +176,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	initMsg := WSMessage{"type": "init", "user_id": userID, "online_users": h.GetOnlineUsers()}
 	client.conn.WriteJSON(initMsg)
 	// broadcast presence online for authenticated users only
-	if authenticated && wasFirstPresence {
+	if authenticated {
 		h.BroadcastPresence(userID, nickname, "online")
 	}
 
@@ -231,12 +215,12 @@ func (h *Hub) writerLoop(c *Client) {
 func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 	defer func() {
 		// on disconnect
-		wasLast, remaining := h.RemoveClient(c)
-		if c.userID > 0 && wasLast {
+		h.RemoveClient(c.userID)
+		if c.userID > 0 {
 			db.Exec("UPDATE presence SET status='offline', updated_at = datetime('now') WHERE user_id = ?", c.userID)
 			h.BroadcastPresence(c.userID, "", "offline")
 		}
-		log.Printf("WebSocket: user ID:%d disconnected (remaining connections: %d)", c.userID, remaining)
+		log.Printf("WebSocket: user ID:%d disconnected", c.userID)
 		c.conn.Close()
 	}()
 
@@ -276,17 +260,6 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 				continue
 			}
 
-			// check recipient online status
-			isOnline, err := database.IsUserOnline(db, toID)
-			if err != nil {
-				c.send <- WSMessage{"type": "error", "message": "Failed to check recipient status"}
-				continue
-			}
-			if !isOnline {
-				c.send <- WSMessage{"type": "error", "message": "Recipient is offline"}
-				continue
-			}
-
 			// store message
 			mid, createdAt, err := database.InsertMessage(db, c.userID, toID, content)
 			if err != nil {
@@ -311,15 +284,9 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 
 			// send to recipient if online
 			h.mu.RLock()
-			recipientSet, ok := h.clients[toID]
-			recipients := make([]*Client, 0, len(recipientSet))
-			if ok {
-				for rc := range recipientSet {
-					recipients = append(recipients, rc)
-				}
-			}
+			recipient, ok := h.clients[toID]
 			h.mu.RUnlock()
-			for _, recipient := range recipients {
+			if ok {
 				recipient.send <- newMsg
 			}
 
