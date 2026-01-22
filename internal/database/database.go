@@ -1005,6 +1005,20 @@ func CountMessagesBetween(db *sql.DB, userA int, userB int) (int, error) {
 	return count, err
 }
 
+// IsUserOnline checks whether a user is currently marked as online.
+func IsUserOnline(db *sql.DB, userID int) (bool, error) {
+	query := `SELECT status FROM presence WHERE user_id = ?`
+	var status string
+	err := db.QueryRow(query, userID).Scan(&status)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return status == "online", nil
+}
+
 // GetPostCategories returns category names for a specific post
 func GetPostCategories(db *sql.DB, postID int) ([]string, error) {
 	query := `
