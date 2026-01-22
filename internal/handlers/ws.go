@@ -29,7 +29,7 @@ type Client struct {
 // Hub maintains active clients and broadcasts
 type Hub struct {
 	mu      sync.RWMutex
-	clients map[int]*Client // map userID (auth or guest) -> client
+	clients map[int]map[*Client]struct{} // map userID (auth or guest) -> set of clients
 	// presence info cached in memory
 	presence map[int]models.User
 	// broadcast channel for safe message dispatch
@@ -40,30 +40,47 @@ type Hub struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:     make(map[int]*Client),
+		clients:     make(map[int]map[*Client]struct{}),
 		presence:    make(map[int]models.User),
 		broadcast:   make(chan WSMessage, 64),
 		nextGuestID: -1,
 	}
 }
 
-func (h *Hub) AddClient(c *Client, nickname string) {
+func (h *Hub) AddClient(c *Client, nickname string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.clients[c.userID] = c
-	if c.userID > 0 {
-		// update presence only for authenticated users
-		h.presence[c.userID] = models.User{ID: c.userID, Username: nickname}
+	_, exists := h.clients[c.userID]
+	if !exists {
+		h.clients[c.userID] = make(map[*Client]struct{})
 	}
+	h.clients[c.userID][c] = struct{}{}
+	if c.userID > 0 {
+		if !exists {
+			// update presence only for authenticated users, once
+			h.presence[c.userID] = models.User{ID: c.userID, Username: nickname}
+			return true
+		}
+	}
+	return false
 }
 
-func (h *Hub) RemoveClient(userID int) {
+func (h *Hub) RemoveClient(c *Client) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.clients, userID)
-	if userID > 0 {
-		delete(h.presence, userID)
+	clients, ok := h.clients[c.userID]
+	if !ok {
+		return false
 	}
+	delete(clients, c)
+	if len(clients) == 0 {
+		delete(h.clients, c.userID)
+		if c.userID > 0 {
+			delete(h.presence, c.userID)
+			return true
+		}
+	}
+	return false
 }
 
 // allocateGuestID returns a unique negative ID for unauthenticated viewers.
@@ -112,8 +129,10 @@ func (h *Hub) Run() {
 		// Capture clients under read lock, then send without holding lock to avoid blocking other ops
 		h.mu.RLock()
 		clients := make([]*Client, 0, len(h.clients))
-		for _, c := range h.clients {
-			clients = append(clients, c)
+		for _, clientSet := range h.clients {
+			for c := range clientSet {
+				clients = append(clients, c)
+			}
 		}
 		h.mu.RUnlock()
 
@@ -163,11 +182,11 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	}
 
 	client := &Client{userID: userID, conn: conn, send: make(chan WSMessage, 16)}
-	h.AddClient(client, nickname)
+	isFirstConnection := h.AddClient(client, nickname)
 
 	log.Printf("WebSocket: user %s (ID:%d) connected", nickname, userID)
 
-	if authenticated {
+	if authenticated && isFirstConnection {
 		// set presence online in DB presence table
 		_, _ = db.Exec("INSERT OR REPLACE INTO presence (user_id, status, nickname, updated_at) VALUES (?, 'online', ?, datetime('now'))", userID, nickname)
 	}
@@ -176,7 +195,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	initMsg := WSMessage{"type": "init", "user_id": userID, "online_users": h.GetOnlineUsers()}
 	client.conn.WriteJSON(initMsg)
 	// broadcast presence online for authenticated users only
-	if authenticated {
+	if authenticated && isFirstConnection {
 		h.BroadcastPresence(userID, nickname, "online")
 	}
 
@@ -215,8 +234,8 @@ func (h *Hub) writerLoop(c *Client) {
 func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 	defer func() {
 		// on disconnect
-		h.RemoveClient(c.userID)
-		if c.userID > 0 {
+		offlineNow := h.RemoveClient(c)
+		if c.userID > 0 && offlineNow {
 			db.Exec("UPDATE presence SET status='offline', updated_at = datetime('now') WHERE user_id = ?", c.userID)
 			h.BroadcastPresence(c.userID, "", "offline")
 		}
@@ -284,9 +303,15 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 
 			// send to recipient if online
 			h.mu.RLock()
-			recipient, ok := h.clients[toID]
-			h.mu.RUnlock()
+			recipientSet, ok := h.clients[toID]
+			recipients := make([]*Client, 0, len(recipientSet))
 			if ok {
+				for recipient := range recipientSet {
+					recipients = append(recipients, recipient)
+				}
+			}
+			h.mu.RUnlock()
+			for _, recipient := range recipients {
 				recipient.send <- newMsg
 			}
 
