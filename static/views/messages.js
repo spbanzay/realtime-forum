@@ -295,7 +295,8 @@ function renderUserList() {
         ? new Date(user.last_message_at).toLocaleString()
         : "No messages"
       const unreadCount = chatState.unreadCounts[user.id] || 0
-      const unreadBadge = unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ""
+      const unreadLabel = unreadCount > 10 ? "10+" : String(unreadCount)
+      const unreadBadge = unreadCount > 0 ? `<span class="unread-badge">${unreadLabel}</span>` : ""
       
       return `
         <button class="chat-user ${active}" data-user-id="${user.id}">
@@ -342,10 +343,6 @@ async function selectChatUser(userId) {
   chatState.messages = []
   chatState.offset = 0
   chatState.hasMore = false
-
-  // НЕ сбрасываем счетчик автоматически - это произойдет при прокрутке вниз
-  // chatState.unreadCounts[userId] = 0
-  // updatePageTitle()
 
   const user = chatState.users.find(u => u.id === userId)
 
@@ -420,6 +417,7 @@ async function loadMessages({ reset = false } = {}) {
       // При первой загрузке показываем последние 10 сообщений
       chatState.messages = reversedMessages
       chatState.offset = messages.length
+      markMessagesAsRead()
     } else {
       // При подгрузке добавляем старые сообщения в начало
       chatState.messages = [...reversedMessages, ...chatState.messages]
@@ -684,14 +682,10 @@ async function handleIncomingMessage(message) {
       if (wrapper) {
         wrapper.scrollTop = wrapper.scrollHeight
       }
-      // Отмечаем как прочитанное только если автоскролл сработал
+      // Отмечаем как прочитанное в активном чате
       markMessagesAsRead()
     } else {
-      // Если не скроллим - увеличиваем счетчик непрочитанных
-      if (messageFrom !== currentUserId) {
-        chatState.unreadCounts[otherUserId] = (chatState.unreadCounts[otherUserId] || 0) + 1
-        updatePageTitle()
-      }
+      markMessagesAsRead()
     }
   }
 
