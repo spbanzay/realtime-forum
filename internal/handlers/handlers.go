@@ -173,7 +173,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if !utils.IsValidEmail(req.Email) ||
 		!utils.IsValidUsername(req.Username) ||
-		req.Age < 16 {
+		req.Age < 16 ||
+		strings.TrimSpace(req.Gender) == "" ||
+		strings.TrimSpace(req.FirstName) == "" ||
+		strings.TrimSpace(req.LastName) == "" {
 		http.Error(w, "invalid data", http.StatusBadRequest)
 		return
 	}
@@ -266,7 +269,11 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/posts
 func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.GetUserIDFromSession(r, h.db)
+	userID, err := middleware.GetUserIDFromSession(r, h.db)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	query := r.URL.Query()
 
 	// filters
@@ -312,6 +319,10 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/posts/{id}
 func (h *Handler) GetPost(w http.ResponseWriter, r *http.Request) {
+	if _, err := middleware.GetUserIDFromSession(r, h.db); err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return

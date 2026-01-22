@@ -32,7 +32,7 @@ window.renderRegister = function () {
 
             <div class="form-group">
               <label>Gender</label>
-              <select id="gender">
+              <select id="gender" required>
                 <option value="">Select gender</option>
                 <option value="female">Female</option>
                 <option value="male">Male</option>
@@ -44,13 +44,13 @@ window.renderRegister = function () {
 
             <div class="form-group">
               <label>First name</label>
-              <input type="text" id="first_name" />
+              <input type="text" id="first_name" required />
               <p class="error form-error" data-error-for="first_name"></p>
             </div>
 
             <div class="form-group">
               <label>Last name</label>
-              <input type="text" id="last_name" />
+              <input type="text" id="last_name" required />
               <p class="error form-error" data-error-for="last_name"></p>
             </div>
 

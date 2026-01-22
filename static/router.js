@@ -40,7 +40,7 @@ window.router = {
     const path = location.pathname
     const { user } = window.state || {}
 
-    const publicRoutes = ["/", "/posts", "/post/:id", "/login", "/register"]
+    const publicRoutes = ["/", "/login", "/register"]
     const isPublicRoute = publicRoutes.some(route => matchRoute(route, path) !== null)
 
     if (!user && !isPublicRoute) {
