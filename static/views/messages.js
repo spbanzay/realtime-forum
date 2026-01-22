@@ -462,12 +462,13 @@ function renderMessagesList({ preserveScroll = false } = {}) {
 
   // Определяем ID последнего прочитанного сообщения
   const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
+  const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
   let unreadCount = 0
   let unreadStartIndex = -1
 
   console.log("Rendering messages. lastReadId:", lastReadId, "total messages:", sortedMessages.length)
 
-  // Подсчитываем непрочитанные сообщения (от других пользователей)
+  // Подсчитываем непрочитанные сообщения (от других пользователей) в загруженном окне
   const currentUserId = getCurrentUserId()
   sortedMessages.forEach((msg, index) => {
     if (currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId) {
@@ -479,15 +480,20 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     }
   })
 
+  const dividerCount = totalUnread > 0 ? totalUnread : unreadCount
+  if (dividerCount > 0 && unreadStartIndex === -1 && sortedMessages.length > 0) {
+    unreadStartIndex = 0
+  }
+
   // Рендерим сообщения с разделителем непрочитанных
   const messagesHTML = sortedMessages.map((message, index) => {
     let html = ''
     
     // Добавляем разделитель перед первым непрочитанным сообщением
-    if (index === unreadStartIndex && unreadCount > 0) {
+    if (index === unreadStartIndex && dividerCount > 0) {
       html += `
         <div class="unread-divider">
-          <span>${unreadCount} непрочитанн${unreadCount === 1 ? 'ое' : unreadCount < 5 ? 'ых' : 'ых'} сообщени${unreadCount === 1 ? 'е' : 'й'}</span>
+          <span>${dividerCount} непрочитанн${dividerCount === 1 ? 'ое' : dividerCount < 5 ? 'ых' : 'ых'} сообщени${dividerCount === 1 ? 'е' : 'й'}</span>
         </div>
       `
     }
