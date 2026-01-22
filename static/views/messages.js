@@ -460,8 +460,10 @@ function renderMessagesList({ preserveScroll = false } = {}) {
 
   // Определяем ID последнего прочитанного сообщения
   const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
+  const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
   let unreadCount = 0
   let unreadStartIndex = -1
+  const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
 
   console.log("Rendering messages. lastReadId:", lastReadId, "total messages:", sortedMessages.length)
 
@@ -477,7 +479,10 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     }
   })
 
-  const dividerCount = unreadCount
+  const dividerCount = totalUnread > 0 ? totalUnread : unreadCount
+  if (dividerCount > 0 && unreadStartIndex === -1 && sortedMessages.length > 0) {
+    unreadStartIndex = 0
+  }
 
   // Рендерим сообщения с разделителем непрочитанных
   const messagesHTML = sortedMessages.map((message, index) => {
@@ -507,6 +512,9 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     const divider = container.querySelector(".unread-divider")
     if (divider) {
       wrapper.scrollTop = Math.max(divider.offsetTop - 24, 0)
+      if (wrapper.scrollHeight <= wrapper.clientHeight) {
+        markMessagesAsRead()
+      }
     } else {
       // Если непрочитанных нет - скроллим вниз
       wrapper.scrollTop = wrapper.scrollHeight
