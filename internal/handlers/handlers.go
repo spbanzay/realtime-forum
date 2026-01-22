@@ -291,26 +291,26 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		posts []models.Post
-		err   error
+		posts   []models.Post
+		postErr error
 	)
 
 	switch {
 	case mine && len(categoryIDs) > 0:
-		posts, err = database.GetPostsByUserIDAndCategories(h.db, userID, categoryIDs)
+		posts, postErr = database.GetPostsByUserIDAndCategories(h.db, userID, categoryIDs)
 	case mine:
-		posts, err = database.GetPostsByUserID(h.db, userID)
+		posts, postErr = database.GetPostsByUserID(h.db, userID)
 	case liked && len(categoryIDs) > 0:
-		posts, err = database.GetLikedPostsByCategories(h.db, userID, categoryIDs)
+		posts, postErr = database.GetLikedPostsByCategories(h.db, userID, categoryIDs)
 	case liked:
-		posts, err = database.GetLikedPosts(h.db, userID)
+		posts, postErr = database.GetLikedPosts(h.db, userID)
 	case len(categoryIDs) > 0:
-		posts, err = database.GetPostsByCategories(h.db, categoryIDs)
+		posts, postErr = database.GetPostsByCategories(h.db, categoryIDs)
 	default:
-		posts, err = database.GetAllPosts(h.db)
+		posts, postErr = database.GetAllPosts(h.db)
 	}
 
-	if err != nil {
+	if postErr != nil {
 		http.Error(w, "failed to load posts", http.StatusInternalServerError)
 		return
 	}
