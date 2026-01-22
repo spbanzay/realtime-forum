@@ -41,8 +41,8 @@ window.router = {
     const path = location.pathname;
     const { user } = window.state || {};
 
-    const publicRoutes = ["/", "/login", "/register"]
-    const isPublicRoute = publicRoutes.some(route => matchRoute(route, path) !== null)
+    const publicRoutes = ["/", "/posts", "/post/:id", "/login", "/register"];
+    const isPublicRoute = publicRoutes.some(route => matchRoute(route, path) !== null);
 
     if (!user && !isPublicRoute) {
       this.navigate("/login");

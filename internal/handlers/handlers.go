@@ -174,10 +174,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if !utils.IsValidEmail(req.Email) ||
 		!utils.IsValidUsername(req.Username) ||
-		req.Age < 16 ||
-		strings.TrimSpace(req.Gender) == "" ||
-		strings.TrimSpace(req.FirstName) == "" ||
-		strings.TrimSpace(req.LastName) == "" {
+		req.Age < 13 {
 		http.Error(w, "invalid data", http.StatusBadRequest)
 		return
 	}
@@ -270,11 +267,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/posts
 func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
-	userID, err := middleware.GetUserIDFromSession(r, h.db)
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
+	userID, _ := middleware.GetUserIDFromSession(r, h.db)
 	query := r.URL.Query()
 
 	// filters
@@ -291,26 +284,26 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		posts   []models.Post
-		postErr error
+		posts []models.Post
+		err   error
 	)
 
 	switch {
 	case mine && len(categoryIDs) > 0:
-		posts, postErr = database.GetPostsByUserIDAndCategories(h.db, userID, categoryIDs)
+		posts, err = database.GetPostsByUserIDAndCategories(h.db, userID, categoryIDs)
 	case mine:
-		posts, postErr = database.GetPostsByUserID(h.db, userID)
+		posts, err = database.GetPostsByUserID(h.db, userID)
 	case liked && len(categoryIDs) > 0:
-		posts, postErr = database.GetLikedPostsByCategories(h.db, userID, categoryIDs)
+		posts, err = database.GetLikedPostsByCategories(h.db, userID, categoryIDs)
 	case liked:
-		posts, postErr = database.GetLikedPosts(h.db, userID)
+		posts, err = database.GetLikedPosts(h.db, userID)
 	case len(categoryIDs) > 0:
-		posts, postErr = database.GetPostsByCategories(h.db, categoryIDs)
+		posts, err = database.GetPostsByCategories(h.db, categoryIDs)
 	default:
-		posts, postErr = database.GetAllPosts(h.db)
+		posts, err = database.GetAllPosts(h.db)
 	}
 
-	if postErr != nil {
+	if err != nil {
 		http.Error(w, "failed to load posts", http.StatusInternalServerError)
 		return
 	}
@@ -320,10 +313,6 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/posts/{id}
 func (h *Handler) GetPost(w http.ResponseWriter, r *http.Request) {
-	if _, err := middleware.GetUserIDFromSession(r, h.db); err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return

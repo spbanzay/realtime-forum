@@ -5,6 +5,7 @@ let chatFormBound = false
 let userListRefreshInterval = null
 let messageHandler = null // Для хранения ссылки на обработчик
 let unreadDividerTimeout = null
+const UNREAD_DIVIDER_HIDE_DELAY = 3000
 let chatState = {
   users: [],
   activeUserId: null,
@@ -295,8 +296,7 @@ function renderUserList() {
         ? new Date(user.last_message_at).toLocaleString()
         : "No messages"
       const unreadCount = chatState.unreadCounts[user.id] || 0
-      const unreadLabel = unreadCount > 10 ? "10+" : String(unreadCount)
-      const unreadBadge = unreadCount > 0 ? `<span class="unread-badge">${unreadLabel}</span>` : ""
+      const unreadBadge = unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ""
       
       return `
         <button class="chat-user ${active}" data-user-id="${user.id}">
@@ -344,16 +344,18 @@ async function selectChatUser(userId) {
   chatState.offset = 0
   chatState.hasMore = false
 
+  // НЕ сбрасываем счетчик автоматически - это произойдет при прокрутке вниз
+  // chatState.unreadCounts[userId] = 0
+  // updatePageTitle()
+
   const user = chatState.users.find(u => u.id === userId)
 
   // Разрешаем ввод только если пользователь онлайн
   const isOnline = user && user.status === "online"
   enableChatInput(isOnline)
-  updateChatEmptyState()
   
   await loadMessages({ reset: true })
   renderUserList()
-  updateChatEmptyState()
 }
 
 function enableChatInput(enabled) {
@@ -364,33 +366,6 @@ function enableChatInput(enabled) {
   }
   if (send) {
     send.disabled = !enabled
-  }
-}
-
-function resetActiveChat() {
-  chatState.activeUserId = null
-  chatState.messages = []
-  chatState.offset = 0
-  chatState.hasMore = false
-  enableChatInput(false)
-
-  const container = document.getElementById("chat-messages")
-  if (container) {
-    container.innerHTML = ""
-  }
-
-  updateChatEmptyState()
-}
-
-function updateChatEmptyState() {
-  const emptyState = document.getElementById("chat-empty-state")
-  const wrapper = document.getElementById("chat-messages-wrapper")
-  const hasActiveUser = chatState.activeUserId !== null
-  if (emptyState) {
-    emptyState.hidden = hasActiveUser
-  }
-  if (wrapper) {
-    wrapper.hidden = !hasActiveUser
   }
 }
 
@@ -461,11 +436,10 @@ function renderMessagesList({ preserveScroll = false } = {}) {
   const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
   let unreadCount = 0
   let unreadStartIndex = -1
-  const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
 
   console.log("Rendering messages. lastReadId:", lastReadId, "total messages:", sortedMessages.length)
 
-  // Подсчитываем непрочитанные сообщения (от других пользователей) в загруженном окне
+  // Подсчитываем непрочитанные сообщения (от других пользователей)
   const currentUserId = getCurrentUserId()
   sortedMessages.forEach((msg, index) => {
     if (currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId) {
@@ -477,20 +451,15 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     }
   })
 
-  const dividerCount = totalUnread > 0 ? totalUnread : unreadCount
-  if (dividerCount > 0 && unreadStartIndex === -1 && sortedMessages.length > 0) {
-    unreadStartIndex = 0
-  }
-
   // Рендерим сообщения с разделителем непрочитанных
   const messagesHTML = sortedMessages.map((message, index) => {
     let html = ''
     
     // Добавляем разделитель перед первым непрочитанным сообщением
-    if (index === unreadStartIndex && dividerCount > 0) {
+    if (index === unreadStartIndex && unreadCount > 0) {
       html += `
         <div class="unread-divider">
-          <span>${dividerCount} непрочитанн${dividerCount === 1 ? 'ое' : dividerCount < 5 ? 'ых' : 'ых'} сообщени${dividerCount === 1 ? 'е' : 'й'}</span>
+          <span>${unreadCount} непрочитанн${unreadCount === 1 ? 'ое' : unreadCount < 5 ? 'ых' : 'ых'} сообщени${unreadCount === 1 ? 'е' : 'й'}</span>
         </div>
       `
     }
@@ -501,24 +470,15 @@ function renderMessagesList({ preserveScroll = false } = {}) {
 
   container.innerHTML = messagesHTML
 
-  const divider = container.querySelector(".unread-divider")
-  if (divider) {
-    startUnreadDividerTimer()
-  } else {
-    clearUnreadDividerTimer()
-  }
-
   if (preserveScroll) {
     // При подгрузке старых сообщений сохраняем позицию скролла
     const newHeight = wrapper.scrollHeight
     wrapper.scrollTop = newHeight - prevHeight + prevTop
   } else {
     // При первой загрузке скроллим к первому непрочитанному, если он есть
+    const divider = container.querySelector(".unread-divider")
     if (divider) {
       wrapper.scrollTop = Math.max(divider.offsetTop - 24, 0)
-      if (wrapper.scrollHeight <= wrapper.clientHeight) {
-        markMessagesAsRead()
-      }
     } else {
       // Если непрочитанных нет - скроллим вниз
       wrapper.scrollTop = wrapper.scrollHeight
@@ -686,10 +646,14 @@ async function handleIncomingMessage(message) {
       if (wrapper) {
         wrapper.scrollTop = wrapper.scrollHeight
       }
-      // Отмечаем как прочитанное в активном чате
+      // Отмечаем как прочитанное только если автоскролл сработал
       markMessagesAsRead()
     } else {
-      markMessagesAsRead()
+      // Если не скроллим - увеличиваем счетчик непрочитанных
+      if (messageFrom !== currentUserId) {
+        chatState.unreadCounts[otherUserId] = (chatState.unreadCounts[otherUserId] || 0) + 1
+        updatePageTitle()
+      }
     }
   }
 
@@ -736,7 +700,7 @@ function markMessagesAsRead() {
           divider.remove()
         }
       }
-      clearUnreadDividerTimer()
+      scheduleUnreadDividerCleanup()
       return
     }
   }
@@ -758,28 +722,32 @@ function markMessagesAsRead() {
         divider.remove()
       }
     }
-    clearUnreadDividerTimer()
+    scheduleUnreadDividerCleanup()
   }
 }
 
-function startUnreadDividerTimer() {
+function scheduleUnreadDividerCleanup() {
   if (unreadDividerTimeout) {
     clearTimeout(unreadDividerTimeout)
   }
+
   unreadDividerTimeout = setTimeout(() => {
-    unreadDividerTimeout = null
     const container = document.getElementById("chat-messages")
-    if (container && container.querySelector(".unread-divider")) {
-      markMessagesAsRead()
-    }
-  }, 4000)
-}
+    if (!container) return
 
-function clearUnreadDividerTimer() {
-  if (unreadDividerTimeout) {
-    clearTimeout(unreadDividerTimeout)
-    unreadDividerTimeout = null
-  }
+    const currentUserId = getCurrentUserId()
+    const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
+    const hasUnread = chatState.messages.some(msg => 
+      currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId
+    )
+
+    if (!hasUnread) {
+      const divider = container.querySelector(".unread-divider")
+      if (divider) {
+        divider.remove()
+      }
+    }
+  }, UNREAD_DIVIDER_HIDE_DELAY)
 }
 
 function updateUserStatus(userId, status) {
@@ -865,7 +833,6 @@ function cleanupChat() {
   
   // Сбрасываем флаг привязки формы
   chatFormBound = false
-  chatState.loading = false
   
   // НЕ сбрасываем счетчики - они нужны для отображения в header
   // chatState.unreadCounts = {}

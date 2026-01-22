@@ -260,15 +260,6 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 				continue
 			}
 
-			// allow messaging only to online users
-			h.mu.RLock()
-			recipient, recipientOnline := h.clients[toID]
-			h.mu.RUnlock()
-			if !recipientOnline {
-				c.send <- WSMessage{"type": "error", "message": "User offline"}
-				continue
-			}
-
 			// store message
 			mid, createdAt, err := database.InsertMessage(db, c.userID, toID, content)
 			if err != nil {
@@ -276,7 +267,7 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 				continue
 			}
 
-			createdAtRFC3339 := time.Now().UTC().Format(time.RFC3339)
+			createdAtRFC3339 := createdAt
 			if parsedTime, err := time.Parse("2006-01-02 15:04:05", createdAt); err == nil {
 				createdAtRFC3339 = parsedTime.UTC().Format(time.RFC3339)
 			}
@@ -292,7 +283,10 @@ func (h *Hub) readerLoop(c *Client, db *sql.DB) {
 			}
 
 			// send to recipient if online
-			if recipientOnline {
+			h.mu.RLock()
+			recipient, ok := h.clients[toID]
+			h.mu.RUnlock()
+			if ok {
 				recipient.send <- newMsg
 			}
 
