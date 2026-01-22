@@ -465,6 +465,7 @@ function renderMessagesList({ preserveScroll = false } = {}) {
   const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
   let unreadCount = 0
   let unreadStartIndex = -1
+  const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
 
   console.log("Rendering messages. lastReadId:", lastReadId, "total messages:", sortedMessages.length)
 
@@ -513,6 +514,9 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     const divider = container.querySelector(".unread-divider")
     if (divider) {
       wrapper.scrollTop = Math.max(divider.offsetTop - 24, 0)
+      if (wrapper.scrollHeight <= wrapper.clientHeight) {
+        markMessagesAsRead()
+      }
     } else {
       // Если непрочитанных нет - скроллим вниз
       wrapper.scrollTop = wrapper.scrollHeight
