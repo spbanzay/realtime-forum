@@ -462,6 +462,7 @@ function renderMessagesList({ preserveScroll = false } = {}) {
 
   // Определяем ID последнего прочитанного сообщения
   const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
+  const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
   let unreadCount = 0
   let unreadStartIndex = -1
   const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
@@ -480,24 +481,10 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     }
   })
 
-  if (unreadStartIndex === -1 && totalUnread > 0 && currentUserId !== null) {
-    let remainingUnread = totalUnread
-    for (let index = sortedMessages.length - 1; index >= 0; index -= 1) {
-      const msg = sortedMessages[index]
-      if (Number(msg.from) !== currentUserId) {
-        remainingUnread -= 1
-        if (remainingUnread === 0) {
-          unreadStartIndex = index
-          break
-        }
-      }
-    }
-    if (unreadStartIndex !== -1) {
-      unreadCount = totalUnread
-    }
+  const dividerCount = totalUnread > 0 ? totalUnread : unreadCount
+  if (dividerCount > 0 && unreadStartIndex === -1 && sortedMessages.length > 0) {
+    unreadStartIndex = 0
   }
-
-  const dividerCount = unreadStartIndex !== -1 ? (totalUnread > 0 ? totalUnread : unreadCount) : 0
 
   // Рендерим сообщения с разделителем непрочитанных
   const messagesHTML = sortedMessages.map((message, index) => {
