@@ -417,7 +417,6 @@ async function loadMessages({ reset = false } = {}) {
       // При первой загрузке показываем последние 10 сообщений
       chatState.messages = reversedMessages
       chatState.offset = messages.length
-      markMessagesAsRead()
     } else {
       // При подгрузке добавляем старые сообщения в начало
       chatState.messages = [...reversedMessages, ...chatState.messages]
@@ -460,7 +459,6 @@ function renderMessagesList({ preserveScroll = false } = {}) {
 
   // Определяем ID последнего прочитанного сообщения
   const lastReadId = Number(chatState.lastReadMessageId[chatState.activeUserId] || 0)
-  const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
   let unreadCount = 0
   let unreadStartIndex = -1
   const totalUnread = chatState.unreadCounts[chatState.activeUserId] || 0
@@ -503,13 +501,19 @@ function renderMessagesList({ preserveScroll = false } = {}) {
 
   container.innerHTML = messagesHTML
 
+  const divider = container.querySelector(".unread-divider")
+  if (divider) {
+    startUnreadDividerTimer()
+  } else {
+    clearUnreadDividerTimer()
+  }
+
   if (preserveScroll) {
     // При подгрузке старых сообщений сохраняем позицию скролла
     const newHeight = wrapper.scrollHeight
     wrapper.scrollTop = newHeight - prevHeight + prevTop
   } else {
     // При первой загрузке скроллим к первому непрочитанному, если он есть
-    const divider = container.querySelector(".unread-divider")
     if (divider) {
       wrapper.scrollTop = Math.max(divider.offsetTop - 24, 0)
       if (wrapper.scrollHeight <= wrapper.clientHeight) {
@@ -732,7 +736,7 @@ function markMessagesAsRead() {
           divider.remove()
         }
       }
-      scheduleUnreadDividerCleanup()
+      clearUnreadDividerTimer()
       return
     }
   }
@@ -754,15 +758,28 @@ function markMessagesAsRead() {
         divider.remove()
       }
     }
-    scheduleUnreadDividerCleanup()
+    clearUnreadDividerTimer()
   }
 }
 
-function scheduleUnreadDividerCleanup() {
+function startUnreadDividerTimer() {
   if (unreadDividerTimeout) {
     clearTimeout(unreadDividerTimeout)
   }
-  unreadDividerTimeout = null
+  unreadDividerTimeout = setTimeout(() => {
+    unreadDividerTimeout = null
+    const container = document.getElementById("chat-messages")
+    if (container && container.querySelector(".unread-divider")) {
+      markMessagesAsRead()
+    }
+  }, 4000)
+}
+
+function clearUnreadDividerTimer() {
+  if (unreadDividerTimeout) {
+    clearTimeout(unreadDividerTimeout)
+    unreadDividerTimeout = null
+  }
 }
 
 function updateUserStatus(userId, status) {
