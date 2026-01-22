@@ -295,7 +295,8 @@ function renderUserList() {
         ? new Date(user.last_message_at).toLocaleString()
         : "No messages"
       const unreadCount = chatState.unreadCounts[user.id] || 0
-      const unreadBadge = unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ""
+      const unreadLabel = unreadCount > 10 ? "10+" : String(unreadCount)
+      const unreadBadge = unreadCount > 0 ? `<span class="unread-badge">${unreadLabel}</span>` : ""
       
       return `
         <button class="chat-user ${active}" data-user-id="${user.id}">
@@ -342,10 +343,6 @@ async function selectChatUser(userId) {
   chatState.messages = []
   chatState.offset = 0
   chatState.hasMore = false
-
-  // НЕ сбрасываем счетчик автоматически - это произойдет при прокрутке вниз
-  // chatState.unreadCounts[userId] = 0
-  // updatePageTitle()
 
   const user = chatState.users.find(u => u.id === userId)
 
@@ -420,6 +417,7 @@ async function loadMessages({ reset = false } = {}) {
       // При первой загрузке показываем последние 10 сообщений
       chatState.messages = reversedMessages
       chatState.offset = messages.length
+      markMessagesAsRead()
     } else {
       // При подгрузке добавляем старые сообщения в начало
       chatState.messages = [...reversedMessages, ...chatState.messages]
@@ -467,7 +465,7 @@ function renderMessagesList({ preserveScroll = false } = {}) {
 
   console.log("Rendering messages. lastReadId:", lastReadId, "total messages:", sortedMessages.length)
 
-  // Подсчитываем непрочитанные сообщения (от других пользователей)
+  // Подсчитываем непрочитанные сообщения (от других пользователей) в загруженном окне
   const currentUserId = getCurrentUserId()
   sortedMessages.forEach((msg, index) => {
     if (currentUserId !== null && Number(msg.from) !== currentUserId && msg.id > lastReadId) {
@@ -479,15 +477,17 @@ function renderMessagesList({ preserveScroll = false } = {}) {
     }
   })
 
+  const dividerCount = unreadCount
+
   // Рендерим сообщения с разделителем непрочитанных
   const messagesHTML = sortedMessages.map((message, index) => {
     let html = ''
     
     // Добавляем разделитель перед первым непрочитанным сообщением
-    if (index === unreadStartIndex && unreadCount > 0) {
+    if (index === unreadStartIndex && dividerCount > 0) {
       html += `
         <div class="unread-divider">
-          <span>${unreadCount} непрочитанн${unreadCount === 1 ? 'ое' : unreadCount < 5 ? 'ых' : 'ых'} сообщени${unreadCount === 1 ? 'е' : 'й'}</span>
+          <span>${dividerCount} непрочитанн${dividerCount === 1 ? 'ое' : dividerCount < 5 ? 'ых' : 'ых'} сообщени${dividerCount === 1 ? 'е' : 'й'}</span>
         </div>
       `
     }
@@ -674,14 +674,10 @@ async function handleIncomingMessage(message) {
       if (wrapper) {
         wrapper.scrollTop = wrapper.scrollHeight
       }
-      // Отмечаем как прочитанное только если автоскролл сработал
+      // Отмечаем как прочитанное в активном чате
       markMessagesAsRead()
     } else {
-      // Если не скроллим - увеличиваем счетчик непрочитанных
-      if (messageFrom !== currentUserId) {
-        chatState.unreadCounts[otherUserId] = (chatState.unreadCounts[otherUserId] || 0) + 1
-        updatePageTitle()
-      }
+      markMessagesAsRead()
     }
   }
 
