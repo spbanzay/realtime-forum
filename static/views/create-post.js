@@ -99,10 +99,10 @@ function bindCreatePostForm() {
       document.querySelectorAll("#categories input:checked")
     ).map(cb => cb.value)
 
-    if (!title || !content || categories.length === 0) {
-      window.showWarning("Fill all fields and select categories")
-      return
-    }
+    // if (!title || !content || categories.length === 0) {
+    //   window.showWarning("Fill all fields and select categories")
+    //   return
+    // }
 
     try {
       await api.createPost({ title, content, categories })

@@ -198,7 +198,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		http.Error(w, "db error", http.StatusInternalServerError)
+		fmt.Printf("REGISTER DB ERROR: %v\n", err) // Это выведет реальную ошибку в терминал
+		http.Error(w, fmt.Sprintf("db error: %v", err), http.StatusInternalServerError)
 		return
 	}
 

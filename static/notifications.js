@@ -194,8 +194,8 @@ class FormValidator {
             } else if (value.length > 120) {
                 errorMessage = 'Title cannot exceed 120 characters.';
                 isValid = false;
-            } else if (!/^[a-zA-Z0-9 _.,!?()-]+$/.test(value)) {
-                errorMessage = 'Title can only contain English letters, numbers, spaces, and common punctuation marks.';
+            } else if (!/^[\p{L}\p{N} _.,!?()\n\r-]+$/u.test(value)) {
+                errorMessage = 'Title can only contain letters, numbers, spaces, and common punctuation marks.';
                 isValid = false;
             }
         }
@@ -211,8 +211,8 @@ class FormValidator {
             } else if (value.length > 1000) {
                 errorMessage = 'Comment content cannot exceed 1000 characters.';
                 isValid = false;
-            } else if (!/^[a-zA-Z0-9 _.,!?()\n\r-]+$/.test(value)) {
-                errorMessage = 'Comment can only contain English letters, numbers, spaces, and common punctuation marks.';
+            } else if (!/^[\p{L}\p{N} _.,!?()\n\r-]+$/u.test(value)) {
+                errorMessage = 'Comment can only contain letters, numbers, spaces, and common punctuation marks.';
                 isValid = false;
             }
         } else {
@@ -223,8 +223,8 @@ class FormValidator {
             } else if (value.length > 5000) {
                 errorMessage = 'Content cannot exceed 5000 characters.';
                 isValid = false;
-            } else if (!/^[a-zA-Z0-9 _.,!?()\n\r-]+$/.test(value)) {
-                errorMessage = 'Post content can only contain English letters, numbers, spaces, and common punctuation marks.';
+            } else if (!/^[\p{L}\p{N} _.,!?()\n\r-]+$/u.test(value)) {
+                errorMessage = 'Post content can only contain letters, numbers, spaces, and common punctuation marks.';
                 isValid = false;
             }
         }
@@ -310,8 +310,8 @@ class FormValidator {
             if (value.length > 500) {
                 errorMessage = 'Message cannot exceed 500 characters.';
                 isValid = false;
-            } else if (!/^[a-zA-Z0-9 _.,!?()\n\r-]+$/.test(value)) {
-                errorMessage = 'Message can only contain English letters, numbers, spaces, and common punctuation marks.';
+            } else if (!/^[\p{L}\p{N} _.,!?()\n\r-]+$/u.test(value)) {
+                errorMessage = 'Message can only contain letters, numbers, spaces, and common punctuation marks.';
                 isValid = false;
             }
         }

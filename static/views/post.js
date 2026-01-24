@@ -262,6 +262,11 @@ function bindCommentForm(postId, rerender) {
       return
     }
 
+    if (window.formValidator && !window.formValidator.validateField({ target: input })) {
+      window.showError("Please fix the errors below before submitting.")
+      return
+    }
+
     try {
       await api.createComment(postId, content)
       input.value = ""
