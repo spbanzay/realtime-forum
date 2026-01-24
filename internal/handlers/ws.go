@@ -113,6 +113,13 @@ func (h *Hub) GetOnlineUsers() []map[string]interface{} {
 	return list
 }
 
+func (h *Hub) IsUserOnline(userID int) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, ok := h.presence[userID]
+	return ok
+}
+
 // Broadcast sends a generic event to all connected clients (non-presence).
 func (h *Hub) Broadcast(msg WSMessage) {
 	select {
