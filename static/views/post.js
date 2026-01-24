@@ -273,8 +273,8 @@ function bindCommentForm(postId, rerender) {
         const n = parseInt(el.textContent.replace(/\D+/g, ""), 10)
         return Number.isFinite(n) ? n : null
       }
-      const nextCount = (toNumber(current) || 0) + 1
-      updateCommentCountDisplay(nextCount)
+      // const nextCount = (toNumber(current) || 0) + 1
+      // updateCommentCountDisplay(nextCount)
     } catch (err) {
       window.handleApiError(err, 'action')
     }
