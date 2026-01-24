@@ -50,6 +50,8 @@ function renderMessagesPage(params) {
   const app = document.getElementById("app")
   if (!app) return
 
+  chatFormBound = false
+
   const targetUserId = params?.id ? Number(params.id) : null
 
   app.innerHTML = `
@@ -332,13 +334,14 @@ function handleIncomingMessage(message) {
   if (!message?.id || chatState.seenMessageIds.has(message.id)) return
   chatState.seenMessageIds.add(message.id)
 
+  const onMessagesPage = window.location.pathname.startsWith("/messages")
   const currentUserId = getCurrentUserId()
   const otherId =
     Number(message.from) === currentUserId
       ? Number(message.to)
       : Number(message.from)
 
-  const isActive = chatState.activeUserId === otherId
+  const isActive = onMessagesPage && chatState.activeUserId === otherId
   const fromOther = Number(message.from) !== currentUserId
 
   const user = chatState.users.find(u => u.id === otherId)
