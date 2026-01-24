@@ -132,7 +132,7 @@ a {
 }
 
 .nav-badge {
-  /* display: inline-flex; */
+  display: inline-block;
   align-items: center;
   justify-content: center;
   min-width: 18px;
@@ -683,12 +683,32 @@ a {
   background: var(--surface);
 }
 
-.chat-user-name {
-  font-weight: 600;
+.chat-user-main {
   display: flex;
   align-items: center;
+  justify-content: space-between; /* имя слева, бейдж справа */
   gap: 8px;
 }
+
+.chat-user-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unread-badge {
+  flex-shrink: 0;
+}
+
+/* уменьшить строку "последнее/дата" */
+.chat-user-last {
+  font-size: 8px;      /* меньше */
+  opacity: 0.75;        /* бледнее */
+  line-height: 1.2;
+}
+
 
 .unread-badge {
   display: inline-flex;

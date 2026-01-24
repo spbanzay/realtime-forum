@@ -3,6 +3,7 @@
 let globalSocket = null
 let messageHandlers = []
 let reconnectTimeout = null
+// window.chatUnread = window.chatUnread || { hasUnread: false }
 
 // Инициализация WebSocket соединения
 // options: { forceReconnect?: boolean }
@@ -39,6 +40,21 @@ function initGlobalWebSocket(options = {}) {
     if (typeof event.data === 'string') {
       try {
         const payload = JSON.parse(event.data)
+
+        // if (payload?.type === "message") {
+        //   const currentUserId = window.state?.user ? Number(window.state.user.id) : null
+
+        //   // помечаем как непрочитанное только входящие
+        //   if (currentUserId && Number(payload.from) !== currentUserId) {
+        //     const onMessagesPage = window.location.pathname === "/messages"
+
+        //     // если не на странице чатов — поднимаем "точку"
+        //     if (!onMessagesPage) {
+        //       window.chatUnread.hasUnread = true
+        //       window.renderHeader?.()
+        //     }
+        //   }
+        // }
         
         // Вызываем все зарегистрированные обработчики
         messageHandlers.forEach(handler => {
