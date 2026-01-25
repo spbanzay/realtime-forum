@@ -83,9 +83,14 @@ window.router = {
   }
 }
 
-window.addEventListener("popstate", () => {
-  router.resolve()
-})
+// window.addEventListener("popstate", () => {
+//   router.resolve()
+// })
+
+window.addEventListener('popstate', (event) => {
+    // Вызываем ваш роутер, чтобы он заново отрисовал страницу на основе нового URL
+    window.router.handleRoute(); 
+});
 
 window.redirectToPosts = function () {
   router.navigate("/posts")

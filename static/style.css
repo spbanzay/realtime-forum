@@ -448,6 +448,9 @@ a {
   box-shadow: var(--shadow);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow-wrap: break-all; /* Современный стандарт для переноса длинных слов */
+  word-break: break-all;     /* Поддержка для старых браузеров */
+  min-width: 0;
 }
 
 .post-card:hover {
@@ -477,12 +480,22 @@ a {
   margin: 12px 0;
 }
 
+.post-card p, 
+.post-card h2, 
+.post-card h3 {
+  overflow-wrap: break-all;
+  white-space: normal;
+}
+
 .post-tags {
   margin-bottom: 10px;
 }
 
 .post-detail .post-tags {
   margin-bottom: 16px;
+  overflow-wrap: break-all;
+  word-break: break-all;    
+  min-width: 0;
 }
 
 .tag {
@@ -527,6 +540,9 @@ a {
   margin-bottom: 12px;
   border: 1px solid var(--border);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  word-break: break-all;      /* Для переноса длинных слов */
+  overflow-wrap: break-word;    /* Чтобы текст не распирал родителя */
+  min-width: 0;
 }
 
 .comment-header {
@@ -537,6 +553,7 @@ a {
 
 .add-comment textarea {
   width: 100%;
+  max-width: 100%;
   min-height: 90px;
   margin-bottom: 10px;
   padding: 10px 12px;
@@ -621,6 +638,7 @@ a {
 .form-group select,
 .form-group textarea {
   border-radius: 10px;
+  max-width: 100%;
   border: 1px solid var(--border);
   padding: 10px 12px;
   font-family: inherit;
@@ -716,7 +734,7 @@ a {
   justify-content: center;
   min-width: 20px;
   height: 20px;
-  padding: 0 6px;
+  margin-left: 6px;
   background: var(--accent);
   color: white;
   border-radius: 10px;
@@ -807,6 +825,9 @@ a {
   padding: 12px 14px;
   border: 1px solid var(--border);
   align-self: flex-start;
+  word-break: break-all;      /* Для переноса длинных слов */
+  overflow-wrap: break-word;    /* Чтобы текст не распирал родителя */
+  max-width: 90%;
 }
 
 .chat-message.own {
@@ -1095,6 +1116,9 @@ a {
   .post-card {
     padding: 18px;
     margin-bottom: 16px;
+    /* overflow-wrap: break-all; 
+    word-break: break-all;    
+    min-width: 0; */
   }
 
   .post-card h2 {
@@ -1182,4 +1206,110 @@ a {
 .chat-content,
 .chat-messages-wrapper {
   min-height: 0;
+}
+
+/* Контейнер для всех уведомлений */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column-reverse; /* Новые сверху стопки */
+  gap: 12px;
+  pointer-events: none; /* Чтобы не мешал кликать по элементам под ним */
+}
+
+/* Сама плашка уведомления */
+.toast {
+  pointer-events: auto; /* Возвращаем кликабельность самой плашке */
+  min-width: 320px;
+  max-width: 420px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: inherit;
+  border-left: 6px solid #ccc;
+  
+  /* Начальное положение для анимации */
+  transform: translateX(120%);
+  animation: toast-slide-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Типы уведомлений */
+.toast-error { border-left-color: #ef4444; background: #fef2f2; color: #991b1b; }
+.toast-success { border-left-color: #10b981; background: #f0fdf4; color: #065f46; }
+.toast-warning { border-left-color: #f59e0b; background: #fffbeb; color: #92400e; }
+.toast-info { border-left-color: var(--primary); background: #eff6ff; color: #1e40af; }
+
+/* Текст внутри */
+.notification-content {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  flex: 1;
+}
+
+/* Кнопка закрытия */
+.notification-close {
+  background: none;
+  border: none;
+  color: currentColor;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 0 0 12px;
+  line-height: 1;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.notification-close:hover { opacity: 1; }
+
+/* Анимации */
+@keyframes toast-slide-in {
+  to { transform: translateX(0); }
+}
+
+.toast.removing {
+  animation: toast-slide-out 0.3s ease-in forwards;
+}
+
+@keyframes toast-slide-out {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(120%); opacity: 0; }
+}
+
+/* Адаптив для мобилок */
+@media (max-width: 480px) {
+  .toast-container {
+    right: 12px;
+    left: 12px; /* На очень узких экранах будет на всю ширину снизу */
+    bottom: 12px;
+  }
+  .toast {
+    min-width: auto;
+  }
+}
+
+.error-content-centered {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    padding: 20px;
+}
+
+.error-container {
+    text-align: center;
+    max-width: 500px;
+    width: 100%;
+}
+
+.error-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
 }

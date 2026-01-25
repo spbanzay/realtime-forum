@@ -6,11 +6,13 @@ class NotificationManager {
     }
 
     createToastContainer() {
-        if (!document.querySelector('.toast-container')) {
-            const container = document.createElement('div');
+        let container = document.querySelector('.toast-container');
+        if (!container) {
+            container = document.createElement('div');
             container.className = 'toast-container';
             document.body.appendChild(container);
         }
+        return container;
     }
 
     showToast(message, type = 'info', duration = 5000) {
@@ -27,6 +29,8 @@ class NotificationManager {
         container.appendChild(toast);
         this.currentToasts.push(toast);
 
+        const closeBtn = toast.querySelector('.notification-close');
+        closeBtn.onclick = () => this.removeToast(toast);
         // Auto remove after duration
         if (duration > 0) {
             setTimeout(() => {
@@ -38,13 +42,19 @@ class NotificationManager {
     }
 
     removeToast(toast) {
-        if (toast && toast.parentElement) {
-            toast.classList.add('removing');
-            setTimeout(() => {
-                toast.remove();
-                this.currentToasts = this.currentToasts.filter(t => t !== toast);
-            }, 300);
-        }
+        if (!toast || !toast.parentElement || toast.classList.contains('removing')) return;
+
+        // Добавляем класс для запуска CSS анимации (fadeOut / slideOut)
+        toast.classList.add('removing');
+
+        // Ждем завершения анимации (300ms) перед удалением из DOM
+        toast.addEventListener('animationend', () => {
+            toast.remove();
+            this.currentToasts = this.currentToasts.filter(t => t !== toast);
+        }, { once: true });
+        
+        // Резервный таймер удаления, если анимация не сработала
+        setTimeout(() => { if(toast.parentElement) toast.remove(); }, 500);
     }
 
     success(message, duration = 5000) {

@@ -33,6 +33,7 @@ type Hub struct {
 	presenceCh chan WSMessage // presence events (no drop)
 
 	nextGuestID int
+	disconnect  chan int
 }
 
 func NewHub() *Hub {
@@ -42,6 +43,7 @@ func NewHub() *Hub {
 		broadcast:   make(chan WSMessage, 64),
 		presenceCh:  make(chan WSMessage, 64),
 		nextGuestID: -1,
+		disconnect:  make(chan int),
 	}
 }
 
@@ -151,7 +153,24 @@ func (h *Hub) Run() {
 			h.dispatch(msg)
 		case msg := <-h.presenceCh:
 			h.dispatch(msg)
+		case userID := <-h.disconnect: // Слушаем сигналы на отключение
+			h.forceDisconnect(userID)
 		}
+	}
+}
+
+func (h *Hub) forceDisconnect(userID int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Находим все соединения (вкладки) конкретного пользователя
+	if connections, exists := h.clients[userID]; exists {
+		for client := range connections {
+			// Закрытие соединения спровоцирует ошибку в readerLoop
+			// и автоматически запустит ваш defer с логикой offline
+			client.conn.Close()
+		}
+		log.Printf("Forced disconnect for user %d (all tabs closed)", userID)
 	}
 }
 
@@ -216,6 +235,14 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 			"INSERT OR REPLACE INTO presence (user_id, status, nickname, updated_at) VALUES (?, 'online', ?, datetime('now'))",
 			userID, nickname,
 		)
+
+		h.BroadcastPresence(userID, nickname, "online")
+
+		h.Broadcast(WSMessage{
+			"type":     "user_created",
+			"user_id":  userID,
+			"username": nickname,
+		})
 	}
 
 	// INIT всегда с актуальным presence

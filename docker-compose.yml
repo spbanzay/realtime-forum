@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  forum:
+    build: .
+    container_name: forum_app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data       # Пробрасываем папку с базой внутрь
+    restart: always
+    
+    # Лимиты, чтобы приложение не "сошло с ума"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    
+    # Проверка: жив ли наш бэкенд?
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/me"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m" # Чтобы логи не забили весь диск
+        max-file: "3"

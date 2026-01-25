@@ -2,15 +2,30 @@ const jsonHeaders = {
   "Content-Type": "application/json",
 }
 
-function handleJSON(res) {
+// function handleJSON(res) {
+//   if (!res.ok) {
+//     return res.text().then(text => {
+//       const error = new Error(text || res.statusText)
+//       error.status = res.status
+//       throw error
+//     })
+//   }
+//   return res.json()
+// }
+
+async function handleJSON(res) {
   if (!res.ok) {
-    return res.text().then(text => {
-      const error = new Error(text || res.statusText)
-      error.status = res.status
-      throw error
-    })
+    // Ждем текст ошибки от сервера (например, "user not found")
+    const text = await res.text();
+    const error = new Error(text || res.statusText);
+    error.status = res.status;
+    
+    // Бросаем ошибку — теперь это прервет выполнение асинхронной функции
+    throw error;
   }
-  return res.json()
+  
+  // Если статус 200-299, парсим JSON
+  return res.json();
 }
 
 // Глобальная функция для обработки API ошибок
@@ -122,6 +137,10 @@ window.api = {
       error.status = res.status
       throw error
     }
+
+    if (window.websocket) {
+      window.websocket.init({ forceReconnect: true });
+    }
   },
 
   async register(data) {
@@ -138,12 +157,27 @@ window.api = {
     }
   },
 
-  async logout() {
-    await fetch("/api/logout", {
-      method: "POST",
-      credentials: "include",
-    })
-  },
+  // async logout() {
+  //   await fetch("/api/logout", {async login
+  //     method: "POST",
+  //     credentials: "include",
+  //   })
+  // },
+
+    async logout() {
+      // 1. Принудительно закрываем WebSocket перед запросом на логаут
+      if (window.websocket && typeof window.websocket.close === 'function') {
+        window.websocket.close();
+      }
+
+      // 2. Выполняем стандартный запрос на сервер для очистки сессии
+      const res = await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      
+      return res;
+    },
 
   // ================= POSTS =================
 

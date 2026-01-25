@@ -50,9 +50,22 @@ function renderMessagesPage(params) {
   const app = document.getElementById("app")
   if (!app) return
 
-  chatFormBound = false
+  const rawId = params?.id;
+  let targetUserId = null;
 
-  const targetUserId = params?.id ? Number(params.id) : null
+  if (rawId !== undefined) {
+    targetUserId = Number(rawId);
+    
+    // Если в URL буквы (NaN), выводим 400 ошибку
+    if (isNaN(targetUserId)) {
+      if (window.renderError) {
+        window.renderError(400, "Invalid Chat ID. Please provide a numeric ID.");
+      }
+      return; // Прекращаем выполнение, не рендерим страницу чата
+    }
+  }
+
+  chatFormBound = false
 
   app.innerHTML = `
     <div class="page messages-page">
@@ -87,17 +100,25 @@ function renderMessagesPage(params) {
 }
 
 async function initChat(targetUserId) {
-  connectChatSocket()
-  await loadChatUsers()
+  connectChatSocket();
+  await loadChatUsers(); // Сначала грузим юзеров и их статусы
 
   if (!chatFormBound) {
-    bindChatForm()
-    bindChatScroll()
-    chatFormBound = true
+    bindChatForm();
+    bindChatScroll();
+    chatFormBound = true;
   }
 
   if (targetUserId) {
-    selectChatUser(targetUserId)
+    const user = chatState.users.find(u => u.id === targetUserId);
+    if (!user) {
+      window.renderError(404, "User not found in your chat list");
+      return;
+    }
+    await selectChatUser(targetUserId);
+    
+    // ПРОВЕРКА: Разблокируем, если целевой юзер онлайн
+    enableChatInput(user.status === "online");
   }
 }
 
@@ -120,19 +141,68 @@ function connectChatSocket() {
   ensureChatMessageHandler()
 }
 
+// function handleSocketMessage(payload) {
+//   if (!payload?.type) return
+
+//   if (payload.type === "init") {
+//     applyPresence(payload.online_users || [])
+//   }
+
+//   if (payload.type === "presence") {
+//     updateUserStatus(payload.user_id, payload.status)
+//   }
+
+//   if (payload.type === "message") {
+//     handleIncomingMessage(payload)
+//   }
+// }
+
 function handleSocketMessage(payload) {
-  if (!payload?.type) return
+  if (!payload?.type) return;
 
   if (payload.type === "init") {
-    applyPresence(payload.online_users || [])
+    applyPresence(payload.online_users || []);
   }
 
   if (payload.type === "presence") {
-    updateUserStatus(payload.user_id, payload.status)
+    updateUserStatus(payload.user_id, payload.status);
   }
 
+  // === ДОБАВЬТЕ ЭТОТ БЛОК ===
+  if (payload.type === "user_created") {
+    handleNewUser(payload);
+  }
+  // ==========================
+
   if (payload.type === "message") {
-    handleIncomingMessage(payload)
+    handleIncomingMessage(payload);
+  }
+}
+
+function handleNewUser(data) {
+  const id = Number(data.user_id);
+  
+  // Проверяем, нет ли его уже в списке (чтобы не дублировать)
+  const exists = chatState.users.some(u => u.id === id);
+  if (exists) return;
+
+  // Добавляем нового человечка в массив
+  chatState.users.push({
+    id: id,
+    username: data.username,
+    status: "online", // Раз он только что прислал user_created, он явно онлайн
+    last_message_at: null
+  });
+
+  if (!chatState.onlineUserIds.includes(id)) {
+    chatState.onlineUserIds.push(id)
+  }
+
+  // Перерисовываем список, чтобы он появился (с учетом сортировки по алфавиту)
+  renderUserList();
+
+  if (chatState.activeUserId === id) {
+    enableChatInput(true)
   }
 }
 
@@ -149,7 +219,8 @@ function applyPresence(onlineUsers) {
   renderUserList()
 
   if (chatState.activeUserId) {
-    enableChatInput(isUserOnline(chatState.activeUserId))
+    const isOnline = chatState.onlineUserIds.includes(chatState.activeUserId);
+    enableChatInput(isOnline);
   }
 }
 
@@ -157,7 +228,13 @@ function applyPresence(onlineUsers) {
 
 async function loadChatUsers() {
   const users = await api.getChatUsers()
-  chatState.users = Array.isArray(users) ? users : []
+  // Приводим ID к числам и сохраняем
+  chatState.users = Array.isArray(users) ? users.map(u => ({
+    ...u,
+    id: Number(u.id),
+    // Если id пользователя уже есть в списке онлайн, ставим online, иначе offline
+    status: chatState.onlineUserIds.includes(Number(u.id)) ? "online" : "offline"
+  })) : [];
   renderUserList()
 }
 
@@ -184,7 +261,7 @@ function renderUserList() {
           <span class="chat-user-name">${escapeHtml(user.username)}${badge}</span>
         </div>
         <div class="chat-user-meta">
-          <span class="status-dot ${user.status}"></span>
+          <span class="status-dot ${user.status}" data-user-id="${user.id}"></span>
           <span class="chat-user-last">${date}</span>
         </div>
       </button>
@@ -196,15 +273,30 @@ function renderUserList() {
   })
 }
 
+// function sortChatUsers() {
+//   chatState.users.sort((a, b) => {
+//     if (a.last_message_at && b.last_message_at) {
+//       return new Date(b.last_message_at) - new Date(a.last_message_at)
+//     }
+//     if (a.last_message_at) return -1
+//     if (b.last_message_at) return 1
+//     return a.username.localeCompare(b.username)
+//   })
+// }
+
 function sortChatUsers() {
   chatState.users.sort((a, b) => {
-    if (a.last_message_at && b.last_message_at) {
-      return new Date(b.last_message_at) - new Date(a.last_message_at)
+    // 1. Сначала сравниваем по времени последнего сообщения
+    const timeA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+    const timeB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+
+    if (timeB !== timeA) {
+      return timeB - timeA; // Новые сообщения выше
     }
-    if (a.last_message_at) return -1
-    if (b.last_message_at) return 1
-    return a.username.localeCompare(b.username)
-  })
+
+    // 2. Если сообщений нет или время одинаковое — по алфавиту (A-Z)
+    return a.username.localeCompare(b.username);
+  });
 }
 
 function updateUserStatus(userId, status) {
@@ -214,11 +306,29 @@ function updateUserStatus(userId, status) {
 
   user.status = status
 
+  if (status === "online") {
+    if (!chatState.onlineUserIds.includes(id)) {
+      chatState.onlineUserIds.push(id)
+    }
+  } else {
+    chatState.onlineUserIds = chatState.onlineUserIds.filter(oid => oid !== id)
+  }
+
+  // 1. Мгновенное обновление точки в DOM (без ререндера всего списка)
+  const dots = document.querySelectorAll(`.status-dot[data-user-id="${id}"]`);
+  dots.forEach(dot => {
+    dot.classList.remove('online', 'offline');
+    dot.classList.add(status);
+  });
+
+  // 2. Управление инпутом, если это активный чат
   if (chatState.activeUserId === id) {
     enableChatInput(status === "online")
   }
 
-  renderUserList()
+  // 3. Полный ререндер нужен только если вы хотите, чтобы юзеры 
+  // перемещались вверх/вниз при входе в сеть (из-за сортировки)
+  // renderUserList() 
 }
 
 /* ===================== MESSAGES ===================== */
@@ -226,13 +336,19 @@ function updateUserStatus(userId, status) {
 async function selectChatUser(userId) {
   if (chatState.activeUserId === userId) return
 
+  const newUrl = `/messages/${userId}`;
+  if (window.location.pathname !== newUrl) {
+    window.history.pushState({ userId }, "", newUrl);
+  }
+
   chatState.activeUserId = userId
   chatState.messages = []
   chatState.offset = 0
   chatState.hasMore = true
   chatState.loading = false
 
-  document.getElementById("chat-messages").innerHTML = ""
+  const messagesContainer = document.getElementById("chat-messages");
+  if (messagesContainer) messagesContainer.innerHTML = "";
 
   enableChatInput(isUserOnline(userId))
   renderUserList()
@@ -241,44 +357,109 @@ async function selectChatUser(userId) {
   markMessagesAsRead()
 }
 
+// async function loadMessages({ reset }) {
+//   if (!chatState.activeUserId || chatState.loading || !chatState.hasMore) return
+//   chatState.loading = true
+
+//   const wrapper = document.getElementById("chat-messages-wrapper")
+//   const indicator = document.getElementById("chat-loading-indicator")
+
+//   const prevHeight = wrapper.scrollHeight
+//   indicator.style.display = "block"
+
+//   const res = await api.getMessages(chatState.activeUserId, chatState.offset)
+//   const messages = res.messages.reverse()
+
+//   messages.forEach(m => chatState.seenMessageIds.add(m.id))
+
+//   chatState.messages = reset
+//     ? messages
+//     : [...messages, ...chatState.messages]
+
+//   chatState.offset += messages.length
+//   chatState.hasMore = res.has_more
+
+//   renderMessagesList({ reset })
+
+//   if (!reset) {
+//     wrapper.scrollTop = wrapper.scrollHeight - prevHeight
+//   } else {
+//     wrapper.scrollTop = wrapper.scrollHeight
+//   }
+
+//   indicator.style.display = "none"
+//   chatState.loading = false
+
+//   requestAnimationFrame(() => {
+//     if (shouldLoadMore(wrapper)) {
+//       loadMessages({ reset: false })
+//     }
+//   })
+// }
+
 async function loadMessages({ reset }) {
-  if (!chatState.activeUserId || chatState.loading || !chatState.hasMore) return
+  // 1. Базовые проверки
+  if (!chatState.activeUserId || chatState.loading || (!reset && !chatState.hasMore)) return
+  
   chatState.loading = true
 
   const wrapper = document.getElementById("chat-messages-wrapper")
   const indicator = document.getElementById("chat-loading-indicator")
+  const prevHeight = wrapper ? wrapper.scrollHeight : 0
 
-  const prevHeight = wrapper.scrollHeight
-  indicator.style.display = "block"
+  if (indicator) indicator.style.display = "block"
 
-  const res = await api.getMessages(chatState.activeUserId, chatState.offset)
-  const messages = res.messages.reverse()
+  try {
+    // 2. Запрос к API (здесь может возникнуть ошибка 404, 500 и т.д.)
+    const res = await api.getMessages(chatState.activeUserId, chatState.offset)
+    
+    // 3. Обработка успешного ответа
+    const messages = res.messages.reverse()
+    messages.forEach(m => chatState.seenMessageIds.add(m.id))
 
-  messages.forEach(m => chatState.seenMessageIds.add(m.id))
+    chatState.messages = reset
+      ? messages
+      : [...messages, ...chatState.messages]
 
-  chatState.messages = reset
-    ? messages
-    : [...messages, ...chatState.messages]
+    chatState.offset += messages.length
+    chatState.hasMore = res.has_more
 
-  chatState.offset += messages.length
-  chatState.hasMore = res.has_more
+    renderMessagesList({ reset })
 
-  renderMessagesList({ reset })
-
-  if (!reset) {
-    wrapper.scrollTop = wrapper.scrollHeight - prevHeight
-  } else {
-    wrapper.scrollTop = wrapper.scrollHeight
-  }
-
-  indicator.style.display = "none"
-  chatState.loading = false
-
-  requestAnimationFrame(() => {
-    if (shouldLoadMore(wrapper)) {
-      loadMessages({ reset: false })
+    // 4. Управление скроллом
+    if (wrapper) {
+      if (!reset) {
+        wrapper.scrollTop = wrapper.scrollHeight - prevHeight
+      } else {
+        wrapper.scrollTop = wrapper.scrollHeight
+      }
     }
-  })
+
+    // 5. Проверка на необходимость подгрузить еще (если экран большой)
+    requestAnimationFrame(() => {
+      if (wrapper && shouldLoadMore(wrapper)) {
+        loadMessages({ reset: false })
+      }
+    })
+
+  } catch (error) {
+    // === ВОТ ЗДЕСЬ МАГИЯ ===
+    console.error("Failed to load messages:", error)
+
+    // Если ошибка серьезная (404, 500, 400), показываем страницу ошибки
+    if (error.status === 404 || error.status === 500 || error.status === 400) {
+      if (window.renderError) {
+        window.renderError(error.status, error.message)
+      }
+      return // Прекращаем выполнение
+    }
+    
+    // Для мелких ошибок (например, таймаут) можно просто вывести уведомление
+  } finally {
+    // В любом случае (успех или ошибка) выключаем лоадер
+    chatState.loading = false
+    if (indicator) indicator.style.display = "none"
+  }
 }
 
 function renderMessagesList({ reset }) {
@@ -288,6 +469,15 @@ function renderMessagesList({ reset }) {
   const currentUserId = getCurrentUserId()
   const lastReadId = chatState.lastReadMessageId[chatState.activeUserId] || 0
   const unreadTotal = chatState.unreadCounts[chatState.activeUserId] || 0
+
+  chatState.messages.sort((a, b) => {
+    // Сортируем по ID (если они инкрементные) или по времени создания
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+    
+    if (timeA !== timeB) return timeA - timeB;
+    return a.id - b.id; // Если время совпало до миллисекунд, сравниваем ID
+  });
 
   let dividerIndex = -1
 

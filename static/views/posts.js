@@ -134,6 +134,11 @@ async function renderPostsPage({ title, filter }) {
     const insertNewPostCard = post => {
       const list = document.getElementById("posts")
       if (!list || !post) return
+
+      if (document.querySelector(`.post-card[data-id="${post.id}"]`)) {
+        console.log("Post already exists, skipping insert");
+        return;
+      }
       const cardHTML = renderPostCard(post, user)
       const wrapper = document.createElement("div")
       wrapper.innerHTML = cardHTML

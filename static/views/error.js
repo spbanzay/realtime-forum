@@ -34,22 +34,22 @@ window.renderError = function(code, message) {
     };
 
     app.innerHTML = `
-        <div class="page">
-            <main class="main-single-column">
-                <section class="content error-content-centered">
-                    <div class="error-container">
+        <div class="page" style="min-height: 80vh; display: flex; flex-direction: column;">
+            <main class="main-single-column" style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                <section class="content error-content-centered" style="width: 100%; display: flex; justify-content: center;">
+                    <div class="error-container" style="text-align: center; max-width: 500px; padding: 40px 20px;">
                         <div class="error-icon-box">
-                            <div class="error-icon">${icons[code] || '⚠️'}</div>
-                            <h1 class="error-title">${code} - ${titles[code] || 'Error'}</h1>
-                            <div class="page-divider"></div>
-                            <div class="error-message">
-                                <p>${message || errorInfo.primary}</p>
-                                ${!message ? `<p>${errorInfo.secondary}</p>` : ''}
+                            <div class="error-icon" style="font-size: 80px; margin-bottom: 20px;">${icons[code] || '⚠️'}</div>
+                            <h1 class="error-title" style="margin-bottom: 10px;">${code} - ${titles[code] || 'Error'}</h1>
+                            <div class="page-divider" style="height: 2px; background: #eee; width: 60px; margin: 20px auto;"></div>
+                            <div class="error-message" style="color: #666; font-size: 1.1rem; line-height: 1.5;">
+                                <p><strong>${message || errorInfo.primary}</strong></p>
+                                ${!message ? `<p style="margin-top: 10px; font-size: 0.95rem; opacity: 0.8;">${errorInfo.secondary}</p>` : ''}
                             </div>
                         </div>
                         
-                        <div class="back-to-home">
-                            <a href="/" class="btn btn-secondary" onclick="event.preventDefault(); window.router.navigate('/')">← Back to Home</a>
+                        <div class="back-to-home" style="margin-top: 40px;">
+                            <a href="/" class="btn btn-secondary" style="padding: 10px 25px; text-decoration: none;" onclick="event.preventDefault(); window.router.navigate('/')">← Back to Home</a>
                         </div>
                     </div>
                 </section>

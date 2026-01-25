@@ -242,7 +242,22 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/logout
+// func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+// 	middleware.LogoutUser(w, r, h.db)
+// 	w.WriteHeader(http.StatusNoContent)
+// }
+
+// POST /api/logout
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	// 1. Получаем ID пользователя перед тем, как уничтожить сессию
+	userID, err := middleware.GetUserIDFromSession(r, h.db)
+	if err == nil {
+		// 2. Сигнализируем Hub о необходимости принудительно закрыть соединения
+		// Предполагается, что экземпляр Hub доступен через ваш Handler (например, h.hub)
+		h.hub.disconnect <- userID
+	}
+
+	// 3. Вызываем стандартную очистку кук и сессии
 	middleware.LogoutUser(w, r, h.db)
 	w.WriteHeader(http.StatusNoContent)
 }
