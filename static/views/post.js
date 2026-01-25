@@ -261,6 +261,10 @@ function bindCommentForm(postId, rerender) {
       window.showWarning("Comment cannot be empty")
       return
     }
+    if (window.formValidator && !window.formValidator.validateField({ target: input })) {
+      window.showError("Please fix the errors below before submitting.")
+      return
+    }
 
     if (window.formValidator && !window.formValidator.validateField({ target: input })) {
       window.showError("Please fix the errors below before submitting.")
